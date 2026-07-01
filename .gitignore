@@ -1,6 +1,6 @@
 HELP.md
 
-# Maven / builds
+# Maven / Java builds
 target/
 build/
 !**/src/main/**/target/
@@ -8,8 +8,20 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
-# Spring Tool Suite / Eclipse
+# Node / frontend builds
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+coverage/
 
+# npm logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Spring Tool Suite / Eclipse
 .apt_generated
 .classpath
 .factorypath
@@ -19,7 +31,6 @@ build/
 .sts4-cache
 
 # IDEs
-
 .idea/
 .vscode/
 *.iws
@@ -27,7 +38,6 @@ build/
 *.ipr
 
 # NetBeans
-
 /nbproject/private/
 /nbbuild/
 /dist/
@@ -35,19 +45,27 @@ build/
 /.nb-gradle/
 
 # OS
-
 .DS_Store
 Thumbs.db
 
-# Local SnapMemoria data
-
+# Local SnapMemoria application data
 .snapmemoria/
 data/
 cache/
 
 # Local configuration
-
+application-local.properties
 application-local.yml
 .env
-.env.local
+.env.*
+!.env.example
 
+# SQLite databases and SQLite sidecar files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Local runtime files
+logs/
+*.log

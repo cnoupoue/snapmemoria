@@ -1,0 +1,36 @@
+{
+  "name": "snapmemoria-tooling",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "format": "npm run format:backend && npm run format:frontend",
+    "format:backend": "./mvnw spotless:apply",
+    "format:frontend": "npm --prefix frontend run format",
+
+    "format:check": "npm run format:check:backend && npm run format:check:frontend",
+    "format:check:backend": "./mvnw spotless:check",
+    "format:check:frontend": "npm --prefix frontend run format:check",
+
+    "lint": "npm run lint:frontend",
+    "lint:frontend": "npm --prefix frontend run lint",
+    "lint:fix": "npm --prefix frontend run lint:fix",
+
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "./mvnw test",
+    "test:frontend": "npm --prefix frontend run test",
+
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "./mvnw -DskipTests package",
+    "build:frontend": "npm --prefix frontend run build",
+
+    "fix": "npm run lint:fix && npm run format",
+    "verify": "npm run format:check && npm run lint && npm run test && npm run build",
+
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.0",
+    "@commitlint/config-conventional": "^21.2.0",
+    "husky": "^9.1.7"
+  }
+}
