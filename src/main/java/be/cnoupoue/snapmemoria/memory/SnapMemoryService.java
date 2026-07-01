@@ -7,6 +7,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import be.cnoupoue.snapmemoria.memory.api.TimelineMonthResponse;
+import be.cnoupoue.snapmemoria.memory.api.TimelineYearResponse;
 
 import java.util.List;
 
@@ -68,6 +70,30 @@ public class SnapMemoryService {
                 memoryPage.getTotalElements(),
                 memoryPage.getTotalPages()
         );
+    }
+
+    public List<TimelineYearResponse> findTimelineYears() {
+        return snapMemoryRepository.countMemoriesByYear()
+                .stream()
+                .map(item -> new TimelineYearResponse(
+                        item.getYear(),
+                        item.getMemoryCount()
+                ))
+                .toList();
+    }
+
+    public List<TimelineMonthResponse> findTimelineMonths(int year) {
+        if (year < 2000 || year > 2100) {
+            throw new IllegalArgumentException("Year must be between 2000 and 2100.");
+        }
+
+        return snapMemoryRepository.countMemoriesByMonth(year)
+                .stream()
+                .map(item -> new TimelineMonthResponse(
+                        item.getMonth(),
+                        item.getMemoryCount()
+                ))
+                .toList();
     }
 
     private void validateDateFilter(Integer year, Integer month) {
