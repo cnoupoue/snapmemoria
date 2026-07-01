@@ -15,6 +15,7 @@ export type Memory = {
     hasOverlay: boolean;
     fileSizeBytes: number;
     lastModifiedAt: string;
+    thumbnailUrl: string | null;
 };
 
 export type MemoryPage = {

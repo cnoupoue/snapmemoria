@@ -164,13 +164,18 @@ public class SnapMemoryService {
     }
 
     private MemoryResponse toResponse(SnapMemory memory) {
+        String thumbnailUrl = memory.getMediaType() == SnapMemoryType.IMAGE
+                ? "/api/memories/%s/thumbnail".formatted(memory.getId())
+                : null;
+
         return new MemoryResponse(
                 memory.getId(),
                 memory.getCapturedAt(),
                 memory.getMediaType().name(),
                 memory.getOverlayPath() != null,
                 memory.getFileSizeBytes(),
-                memory.getLastModifiedAt()
+                memory.getLastModifiedAt(),
+                thumbnailUrl
         );
     }
 

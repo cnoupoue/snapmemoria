@@ -6,6 +6,7 @@ public record MemoryResponse(
         String mediaType,
         boolean hasOverlay,
         long fileSizeBytes,
-        String lastModifiedAt
+        String lastModifiedAt,
+        String thumbnailUrl
 ) {
 }

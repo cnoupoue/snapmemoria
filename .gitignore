@@ -1,7 +1,6 @@
 HELP.md
 
 # Maven / builds
-
 target/
 build/
 !**/src/main/**/target/

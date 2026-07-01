@@ -212,13 +212,27 @@ function App() {
               <div className="memory-grid">
                 {memories.map((memory) => (
                     <article className="memory-card" key={memory.id}>
-                      <div className="memory-placeholder">
-                  <span className="media-icon">
-                    {memory.mediaType === "VIDEO" ? "▶" : "▣"}
-                  </span>
+                      <div className="memory-preview">
+                        {memory.thumbnailUrl ? (
+                            <img
+                                alt={`Snapchat Memory from ${memory.capturedAt}`}
+                                className="memory-thumbnail"
+                                loading="lazy"
+                                src={memory.thumbnailUrl}
+                            />
+                        ) : (
+                            <div className="memory-video-placeholder">
+                              <span className="media-icon">▶</span>
+                              <span>Video preview coming soon</span>
+                            </div>
+                        )}
 
                         {memory.hasOverlay && (
                             <span className="overlay-badge">Overlay</span>
+                        )}
+
+                        {memory.mediaType === "VIDEO" && (
+                            <span className="video-badge">Video</span>
                         )}
                       </div>
 
