@@ -360,6 +360,43 @@ button {
     color: #ffb1b1;
 }
 
+.load-more-container {
+    display: flex;
+    justify-content: center;
+    padding: 32px 0 12px;
+}
+
+.load-more-button {
+    min-width: 170px;
+    padding: 11px 18px;
+    color: #171717;
+    cursor: pointer;
+    background: #fffc00;
+    border: 1px solid #ddd900;
+    border-radius: 10px;
+    font-weight: 700;
+    transition:
+            transform 150ms ease,
+            filter 150ms ease;
+}
+
+.load-more-button:hover:not(:disabled) {
+    filter: brightness(0.96);
+    transform: translateY(-1px);
+}
+
+.load-more-button:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+.end-of-list {
+    padding: 26px 0 8px;
+    color: #848484;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
 @media (max-width: 780px) {
     .memory-viewer-backdrop {
         padding: 10px;

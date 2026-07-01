@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { MemoryViewer } from "./components/MemoryViewer";
 import {
   getMemories,
+  getMemoryDetail,
   getTimelineMonths,
   getTimelineYears,
 } from "./api/snapmemoriaApi";
@@ -10,8 +12,8 @@ import type {
   TimelineMonth,
   TimelineYear,
 } from "./api/types";
-import { MemoryViewer } from "./components/MemoryViewer";
-import { getMemoryDetail } from "./api/snapmemoriaApi";
+
+const PAGE_SIZE = 48;
 
 const MONTH_NAMES = [
   "January",
@@ -43,18 +45,37 @@ function App() {
 
   const [selectedYear, setSelectedYear] = useState<number | undefined>();
   const [selectedMonth, setSelectedMonth] = useState<number | undefined>();
-  const [selectedMemory, setSelectedMemory] = useState<MemoryDetail | null>(null);
-  const [isLoadingSelectedMemory, setIsLoadingSelectedMemory] = useState(false);
-  const [selectedMemoryError, setSelectedMemoryError] = useState<string | null>(null);
+
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalMemories, setTotalMemories] = useState(0);
+  const [hasMoreMemories, setHasMoreMemories] = useState(false);
 
   const [isLoadingYears, setIsLoadingYears] = useState(true);
   const [isLoadingMemories, setIsLoadingMemories] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
+
+  const [selectedMemory, setSelectedMemory] = useState<MemoryDetail | null>(
+      null,
+  );
+  const [isLoadingSelectedMemory, setIsLoadingSelectedMemory] =
+      useState(false);
+  const [selectedMemoryError, setSelectedMemoryError] = useState<
+      string | null
+  >(null);
+
+  /*
+   * Prevents an older response from replacing newer results
+   * when the user changes year or month quickly.
+   */
+  const memoryRequestVersion = useRef(0);
 
   useEffect(() => {
     async function loadYears() {
       try {
         const data = await getTimelineYears();
+
         setYears(data);
 
         if (data.length > 0) {
@@ -89,22 +110,78 @@ function App() {
   }, [selectedYear]);
 
   useEffect(() => {
-    async function loadMemories() {
+    async function loadFirstMemoryPage() {
+      const requestVersion = ++memoryRequestVersion.current;
+
       setIsLoadingMemories(true);
       setError(null);
+      setMemories([]);
+      setCurrentPage(0);
+      setTotalMemories(0);
+      setHasMoreMemories(false);
 
       try {
-        const data = await getMemories(selectedYear, selectedMonth);
+        const data = await getMemories(
+            selectedYear,
+            selectedMonth,
+            0,
+            PAGE_SIZE,
+        );
+
+        if (requestVersion !== memoryRequestVersion.current) {
+          return;
+        }
+
         setMemories(data.content);
+        setCurrentPage(data.page);
+        setTotalMemories(data.totalElements);
+        setHasMoreMemories(data.page + 1 < data.totalPages);
       } catch {
-        setError("Could not load memories.");
+        if (requestVersion === memoryRequestVersion.current) {
+          setError("Could not load Memories.");
+        }
       } finally {
-        setIsLoadingMemories(false);
+        if (requestVersion === memoryRequestVersion.current) {
+          setIsLoadingMemories(false);
+        }
       }
     }
 
-    void loadMemories();
+    void loadFirstMemoryPage();
   }, [selectedYear, selectedMonth]);
+
+  async function loadMoreMemories() {
+    if (isLoadingMore || !hasMoreMemories) {
+      return;
+    }
+
+    const nextPage = currentPage + 1;
+
+    setIsLoadingMore(true);
+    setError(null);
+
+    try {
+      const data = await getMemories(
+          selectedYear,
+          selectedMonth,
+          nextPage,
+          PAGE_SIZE,
+      );
+
+      setMemories((currentMemories) => [
+        ...currentMemories,
+        ...data.content,
+      ]);
+
+      setCurrentPage(data.page);
+      setTotalMemories(data.totalElements);
+      setHasMoreMemories(data.page + 1 < data.totalPages);
+    } catch {
+      setError("Could not load more Memories.");
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
 
   function selectYear(year: number) {
     setSelectedYear(year);
@@ -114,13 +191,6 @@ function App() {
   function selectMonth(month: number) {
     setSelectedMonth(month);
   }
-
-  const pageTitle =
-      selectedYear === undefined
-          ? "All Memories"
-          : selectedMonth === undefined
-              ? String(selectedYear)
-              : `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
 
   async function openMemory(memoryId: string) {
     setSelectedMemory(null);
@@ -145,11 +215,19 @@ function App() {
     setIsLoadingSelectedMemory(false);
   }
 
+  const pageTitle =
+      selectedYear === undefined
+          ? "All Memories"
+          : selectedMonth === undefined
+              ? String(selectedYear)
+              : `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
+
   return (
       <main className="app-shell">
         <aside className="sidebar">
           <div className="brand">
             <span className="brand-mark">S</span>
+
             <div>
               <h1>SnapMemoria</h1>
               <p>Your Snapchat archive</p>
@@ -195,7 +273,7 @@ function App() {
                     onClick={() => setSelectedMonth(undefined)}
                     type="button"
                 >
-                  All year
+                  <span>All year</span>
                 </button>
 
                 <div className="months-list">
@@ -225,7 +303,7 @@ function App() {
             </div>
 
             <p className="memory-count">
-              {memories.length} Memories loaded
+              {totalMemories} Memories · {memories.length} loaded
             </p>
           </header>
 
@@ -242,64 +320,89 @@ function App() {
           )}
 
           {!isLoadingMemories && memories.length > 0 && (
-              <div className="memory-grid">
-                {memories.map((memory) => (
-                    <button
-                        aria-label={`Open Memory from ${memory.capturedAt}`}
-                        className="memory-card"
-                        key={memory.id}
-                        onClick={() => void openMemory(memory.id)}
-                        type="button"
-                    >
-                      <div className="memory-preview">
-                        <img
-                            alt={`Snapchat Memory from ${memory.capturedAt}`}
-                            className="memory-thumbnail"
-                            loading="lazy"
-                            onError={(event) => {
-                              event.currentTarget.style.display = "none";
+              <>
+                <div className="memory-grid">
+                  {memories.map((memory) => (
+                      <button
+                          aria-label={`Open Memory from ${memory.capturedAt}`}
+                          className="memory-card"
+                          key={memory.id}
+                          onClick={() => void openMemory(memory.id)}
+                          type="button"
+                      >
+                        <div className="memory-preview">
+                          <img
+                              alt={`Snapchat Memory from ${memory.capturedAt}`}
+                              className="memory-thumbnail"
+                              loading="lazy"
+                              onError={(event) => {
+                                event.currentTarget.style.display = "none";
 
-                              const fallback = event.currentTarget.nextElementSibling;
+                                const fallback =
+                                    event.currentTarget.nextElementSibling;
 
-                              if (fallback instanceof HTMLElement) {
-                                fallback.hidden = false;
-                              }
-                            }}
-                            src={memory.thumbnailUrl ?? ""}
-                        />
+                                if (fallback instanceof HTMLElement) {
+                                  fallback.hidden = false;
+                                }
+                              }}
+                              src={memory.thumbnailUrl ?? ""}
+                          />
 
-                        <div className="memory-video-placeholder" hidden>
-    <span className="media-icon">
-      {memory.mediaType === "VIDEO" ? "▶" : "▣"}
-    </span>
-                          <span>
-      {memory.mediaType === "VIDEO"
-          ? "Video preview unavailable"
-          : "Image preview unavailable"}
-    </span>
+                          <div className="memory-video-placeholder" hidden>
+                      <span className="media-icon">
+                        {memory.mediaType === "VIDEO" ? "▶" : "▣"}
+                      </span>
+
+                            <span>
+                        {memory.mediaType === "VIDEO"
+                            ? "Video preview unavailable"
+                            : "Image preview unavailable"}
+                      </span>
+                          </div>
+
+                          {memory.hasOverlay && (
+                              <span className="overlay-badge">Overlay</span>
+                          )}
+
+                          {memory.mediaType === "VIDEO" && (
+                              <span className="video-badge">Video</span>
+                          )}
                         </div>
 
-                        {memory.hasOverlay && (
-                            <span className="overlay-badge">Overlay</span>
-                        )}
+                        <div className="memory-card-content">
+                          <strong>{memory.capturedAt}</strong>
 
-                        {memory.mediaType === "VIDEO" && (
-                            <span className="video-badge">Video</span>
-                        )}
-                      </div>
+                          <span>
+                      {memory.mediaType.toLowerCase()} ·{" "}
+                            {formatFileSize(memory.fileSizeBytes)}
+                    </span>
+                        </div>
+                      </button>
+                  ))}
+                </div>
 
-                      <div className="memory-card-content">
-                        <strong>{memory.capturedAt}</strong>
-                        <span>
-                    {memory.mediaType.toLowerCase()} ·{" "}
-                          {formatFileSize(memory.fileSizeBytes)}
-                  </span>
-                      </div>
-                    </button>
-                ))}
-              </div>
+                {hasMoreMemories && (
+                    <div className="load-more-container">
+                      <button
+                          className="load-more-button"
+                          disabled={isLoadingMore}
+                          onClick={() => void loadMoreMemories()}
+                          type="button"
+                      >
+                        {isLoadingMore ? "Loading more Memories…" : "Load more"}
+                      </button>
+                    </div>
+                )}
+
+                {!hasMoreMemories && memories.length > 0 && (
+                    <p className="end-of-list">
+                      You have reached the end of this period.
+                    </p>
+                )}
+              </>
           )}
         </section>
+
         <MemoryViewer
             error={selectedMemoryError}
             isLoading={isLoadingSelectedMemory}
