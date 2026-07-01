@@ -36,3 +36,18 @@ export type MemoryDetail = {
     mediaUrl: string;
     overlayUrl: string | null;
 };
+
+export type FlashbackMemory = {
+    id: string;
+    capturedAt: string;
+    year: number;
+    yearsAgo: number;
+    mediaType: "IMAGE" | "VIDEO";
+    hasOverlay: boolean;
+    fileSizeBytes: number;
+};
+
+export type FlashbackResponse = {
+    date: string;
+    memories: FlashbackMemory[];
+};

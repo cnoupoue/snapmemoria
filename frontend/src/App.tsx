@@ -12,6 +12,7 @@ import type {
   TimelineMonth,
   TimelineYear,
 } from "./api/types";
+import { FlashbacksPage } from "./components/FlashbacksPage";
 
 const PAGE_SIZE = 48;
 
@@ -64,6 +65,10 @@ function App() {
   const [selectedMemoryError, setSelectedMemoryError] = useState<
       string | null
   >(null);
+
+  const [activeView, setActiveView] = useState<"archive" | "flashbacks">(
+      "archive",
+  );
 
   /*
    * Prevents an older response from replacing newer results
@@ -184,11 +189,13 @@ function App() {
   }
 
   function selectYear(year: number) {
+    setActiveView("archive");
     setSelectedYear(year);
     setSelectedMonth(undefined);
   }
 
   function selectMonth(month: number) {
+    setActiveView("archive");
     setSelectedMonth(month);
   }
 
@@ -235,6 +242,27 @@ function App() {
           </div>
 
           <section className="sidebar-section">
+            <section className="sidebar-section sidebar-primary-navigation">
+              <button
+                  className={`sidebar-main-link ${
+                      activeView === "archive" ? "is-active" : ""
+                  }`}
+                  onClick={() => setActiveView("archive")}
+                  type="button"
+              >
+                Archive
+              </button>
+
+              <button
+                  className={`sidebar-main-link ${
+                      activeView === "flashbacks" ? "is-active" : ""
+                  }`}
+                  onClick={() => setActiveView("flashbacks")}
+                  type="button"
+              >
+                Flashbacks
+              </button>
+            </section>
             <p className="sidebar-label">Timeline</p>
 
             {isLoadingYears && <p className="muted-text">Loading years…</p>}
@@ -295,113 +323,116 @@ function App() {
           )}
         </aside>
 
-        <section className="content">
-          <header className="content-header">
-            <div>
-              <p className="eyebrow">Memory archive</p>
-              <h2>{pageTitle}</h2>
-            </div>
-
-            <p className="memory-count">
-              {totalMemories} Memories · {memories.length} loaded
-            </p>
-          </header>
-
-          {error && <div className="error-banner">{error}</div>}
-
-          {isLoadingMemories && (
-              <div className="state-message">Loading Memories…</div>
-          )}
-
-          {!isLoadingMemories && memories.length === 0 && !error && (
-              <div className="state-message">
-                No Memories found for this period.
-              </div>
-          )}
-
-          {!isLoadingMemories && memories.length > 0 && (
-              <>
-                <div className="memory-grid">
-                  {memories.map((memory) => (
-                      <button
-                          aria-label={`Open Memory from ${memory.capturedAt}`}
-                          className="memory-card"
-                          key={memory.id}
-                          onClick={() => void openMemory(memory.id)}
-                          type="button"
-                      >
-                        <div className="memory-preview">
-                          <img
-                              alt={`Snapchat Memory from ${memory.capturedAt}`}
-                              className="memory-thumbnail"
-                              loading="lazy"
-                              onError={(event) => {
-                                event.currentTarget.style.display = "none";
-
-                                const fallback =
-                                    event.currentTarget.nextElementSibling;
-
-                                if (fallback instanceof HTMLElement) {
-                                  fallback.hidden = false;
-                                }
-                              }}
-                              src={memory.thumbnailUrl ?? ""}
-                          />
-
-                          <div className="memory-video-placeholder" hidden>
-                      <span className="media-icon">
-                        {memory.mediaType === "VIDEO" ? "▶" : "▣"}
-                      </span>
-
-                            <span>
-                        {memory.mediaType === "VIDEO"
-                            ? "Video preview unavailable"
-                            : "Image preview unavailable"}
-                      </span>
-                          </div>
-
-                          {memory.hasOverlay && (
-                              <span className="overlay-badge">Overlay</span>
-                          )}
-
-                          {memory.mediaType === "VIDEO" && (
-                              <span className="video-badge">Video</span>
-                          )}
-                        </div>
-
-                        <div className="memory-card-content">
-                          <strong>{memory.capturedAt}</strong>
-
-                          <span>
-                      {memory.mediaType.toLowerCase()} ·{" "}
-                            {formatFileSize(memory.fileSizeBytes)}
-                    </span>
-                        </div>
-                      </button>
-                  ))}
+        {activeView === "archive" ? (
+            <section className="content">
+              <header className="content-header">
+                <div>
+                  <p className="eyebrow">Memory archive</p>
+                  <h2>{pageTitle}</h2>
                 </div>
 
-                {hasMoreMemories && (
-                    <div className="load-more-container">
-                      <button
-                          className="load-more-button"
-                          disabled={isLoadingMore}
-                          onClick={() => void loadMoreMemories()}
-                          type="button"
-                      >
-                        {isLoadingMore ? "Loading more Memories…" : "Load more"}
-                      </button>
-                    </div>
-                )}
+                <p className="memory-count">
+                  {totalMemories} Memories · {memories.length} loaded
+                </p>
+              </header>
 
-                {!hasMoreMemories && memories.length > 0 && (
-                    <p className="end-of-list">
-                      You have reached the end of this period.
-                    </p>
-                )}
-              </>
-          )}
-        </section>
+              {error && <div className="error-banner">{error}</div>}
+
+              {isLoadingMemories && (
+                  <div className="state-message">Loading Memories…</div>
+              )}
+
+              {!isLoadingMemories && memories.length === 0 && !error && (
+                  <div className="state-message">
+                    No Memories found for this period.
+                  </div>
+              )}
+
+              {!isLoadingMemories && memories.length > 0 && (
+                  <>
+                    <div className="memory-grid">
+                      {memories.map((memory) => (
+                          <button
+                              aria-label={`Open Memory from ${memory.capturedAt}`}
+                              className="memory-card"
+                              key={memory.id}
+                              onClick={() => void openMemory(memory.id)}
+                              type="button"
+                          >
+                            <div className="memory-preview">
+                              <img
+                                  alt={`Snapchat Memory from ${memory.capturedAt}`}
+                                  className="memory-thumbnail"
+                                  loading="lazy"
+                                  onError={(event) => {
+                                    event.currentTarget.style.display = "none";
+
+                                    const fallback = event.currentTarget.nextElementSibling;
+
+                                    if (fallback instanceof HTMLElement) {
+                                      fallback.hidden = false;
+                                    }
+                                  }}
+                                  src={memory.thumbnailUrl ?? ""}
+                              />
+
+                              <div className="memory-video-placeholder" hidden>
+                  <span className="media-icon">
+                    {memory.mediaType === "VIDEO" ? "▶" : "▣"}
+                  </span>
+
+                                <span>
+                    {memory.mediaType === "VIDEO"
+                        ? "Video preview unavailable"
+                        : "Image preview unavailable"}
+                  </span>
+                              </div>
+
+                              {memory.hasOverlay && (
+                                  <span className="overlay-badge">Overlay</span>
+                              )}
+
+                              {memory.mediaType === "VIDEO" && (
+                                  <span className="video-badge">Video</span>
+                              )}
+                            </div>
+
+                            <div className="memory-card-content">
+                              <strong>{memory.capturedAt}</strong>
+
+                              <span>
+                  {memory.mediaType.toLowerCase()} ·{" "}
+                                {formatFileSize(memory.fileSizeBytes)}
+                </span>
+                            </div>
+                          </button>
+                      ))}
+                    </div>
+
+                    {hasMoreMemories && (
+                        <div className="load-more-container">
+                          <button
+                              className="load-more-button"
+                              disabled={isLoadingMore}
+                              onClick={() => void loadMoreMemories()}
+                              type="button"
+                          >
+                            {isLoadingMore ? "Loading more Memories…" : "Load more"}
+                          </button>
+                        </div>
+                    )}
+
+                    {!hasMoreMemories && memories.length > 0 && (
+                        <p className="end-of-list">
+                          You have reached the end of this period.
+                        </p>
+                    )}
+                  </>
+              )}
+            </section>
+        ) : (
+            <FlashbacksPage onOpenMemory={(memoryId) => void openMemory(memoryId)} />
+        )}
 
         <MemoryViewer
             error={selectedMemoryError}

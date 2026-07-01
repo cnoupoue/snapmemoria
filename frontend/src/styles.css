@@ -397,6 +397,89 @@ button {
     font-size: 0.9rem;
 }
 
+.sidebar-primary-navigation {
+    display: grid;
+    gap: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #343434;
+}
+
+.sidebar-main-link {
+    width: 100%;
+    padding: 10px;
+    color: #d5d5d5;
+    cursor: pointer;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
+    font-weight: 700;
+}
+
+.sidebar-main-link:hover {
+    background: #2a2a2a;
+}
+
+.sidebar-main-link.is-active {
+    color: #171717;
+    background: #fffc00;
+}
+
+.flashbacks-header {
+    align-items: center;
+}
+
+.flashback-date-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.flashback-date-input {
+    padding: 9px 10px;
+    color: #333;
+    background: white;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+}
+
+.flashback-today-button {
+    padding: 10px 13px;
+    color: #171717;
+    cursor: pointer;
+    background: #fffc00;
+    border: 1px solid #ddd900;
+    border-radius: 8px;
+    font-weight: 700;
+}
+
+.flashbacks-summary {
+    margin: -12px 0 30px;
+    color: #777;
+}
+
+.flashback-year-section {
+    margin-bottom: 46px;
+}
+
+.flashback-year-header {
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    margin-bottom: 14px;
+}
+
+.flashback-year-header h3 {
+    margin: 0;
+    font-size: 1.5rem;
+    letter-spacing: -0.03em;
+}
+
+.flashback-year-header span {
+    color: #777;
+    font-size: 0.9rem;
+}
+
 @media (max-width: 780px) {
     .memory-viewer-backdrop {
         padding: 10px;
@@ -431,5 +514,17 @@ button {
     .content-header {
         align-items: flex-start;
         flex-direction: column;
+    }
+
+    .flashbacks-header {
+        align-items: flex-start;
+    }
+
+    .flashback-date-controls {
+        width: 100%;
+    }
+
+    .flashback-date-input {
+        flex: 1;
     }
 }

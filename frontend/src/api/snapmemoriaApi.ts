@@ -1,4 +1,5 @@
 import type {
+    FlashbackResponse,
     MemoryDetail,
     MemoryPage,
     TimelineMonth,
@@ -12,7 +13,7 @@ async function request<T>(path: string): Promise<T> {
         throw new Error(`Request failed with status ${response.status}`);
     }
 
-    return response.json() as Promise<T>;
+    return await response.json() as Promise<T>;
 }
 
 export function getTimelineYears(): Promise<TimelineYear[]> {
@@ -47,4 +48,14 @@ export function getMemories(
 
 export function getMemoryDetail(memoryId: string): Promise<MemoryDetail> {
     return request<MemoryDetail>(`/api/memories/${memoryId}`);
+}
+
+export function getTodayFlashbacks(): Promise<FlashbackResponse> {
+    return request<FlashbackResponse>("/api/flashbacks/today");
+}
+
+export function getFlashbacksByDate(
+    date: string,
+): Promise<FlashbackResponse> {
+    return request<FlashbackResponse>(`/api/flashbacks?date=${date}`);
 }
