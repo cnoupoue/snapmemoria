@@ -4,7 +4,14 @@ import {
   getTimelineMonths,
   getTimelineYears,
 } from "./api/snapmemoriaApi";
-import type { Memory, TimelineMonth, TimelineYear } from "./api/types";
+import type {
+  Memory,
+  MemoryDetail,
+  TimelineMonth,
+  TimelineYear,
+} from "./api/types";
+import { MemoryViewer } from "./components/MemoryViewer";
+import { getMemoryDetail } from "./api/snapmemoriaApi";
 
 const MONTH_NAMES = [
   "January",
@@ -36,6 +43,9 @@ function App() {
 
   const [selectedYear, setSelectedYear] = useState<number | undefined>();
   const [selectedMonth, setSelectedMonth] = useState<number | undefined>();
+  const [selectedMemory, setSelectedMemory] = useState<MemoryDetail | null>(null);
+  const [isLoadingSelectedMemory, setIsLoadingSelectedMemory] = useState(false);
+  const [selectedMemoryError, setSelectedMemoryError] = useState<string | null>(null);
 
   const [isLoadingYears, setIsLoadingYears] = useState(true);
   const [isLoadingMemories, setIsLoadingMemories] = useState(false);
@@ -111,6 +121,29 @@ function App() {
           : selectedMonth === undefined
               ? String(selectedYear)
               : `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
+
+  async function openMemory(memoryId: string) {
+    setSelectedMemory(null);
+    setSelectedMemoryError(null);
+    setIsLoadingSelectedMemory(true);
+
+    try {
+      const detail = await getMemoryDetail(memoryId);
+      setSelectedMemory(detail);
+    } catch {
+      setSelectedMemoryError(
+          "Could not open this Memory. The source drive may be unavailable.",
+      );
+    } finally {
+      setIsLoadingSelectedMemory(false);
+    }
+  }
+
+  function closeMemoryViewer() {
+    setSelectedMemory(null);
+    setSelectedMemoryError(null);
+    setIsLoadingSelectedMemory(false);
+  }
 
   return (
       <main className="app-shell">
@@ -211,7 +244,13 @@ function App() {
           {!isLoadingMemories && memories.length > 0 && (
               <div className="memory-grid">
                 {memories.map((memory) => (
-                    <article className="memory-card" key={memory.id}>
+                    <button
+                        aria-label={`Open Memory from ${memory.capturedAt}`}
+                        className="memory-card"
+                        key={memory.id}
+                        onClick={() => void openMemory(memory.id)}
+                        type="button"
+                    >
                       <div className="memory-preview">
                         <img
                             alt={`Snapchat Memory from ${memory.capturedAt}`}
@@ -256,11 +295,17 @@ function App() {
                           {formatFileSize(memory.fileSizeBytes)}
                   </span>
                       </div>
-                    </article>
+                    </button>
                 ))}
               </div>
           )}
         </section>
+        <MemoryViewer
+            error={selectedMemoryError}
+            isLoading={isLoadingSelectedMemory}
+            memory={selectedMemory}
+            onClose={closeMemoryViewer}
+        />
       </main>
   );
 }

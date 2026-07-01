@@ -2,8 +2,10 @@ package be.cnoupoue.snapmemoria.thumbnail;
 
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.CacheControl;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,5 +36,13 @@ public class MemoryThumbnailController {
                 .contentType(MediaType.IMAGE_JPEG)
                 .cacheControl(CacheControl.maxAge(Duration.ofDays(30)))
                 .body(thumbnail);
+    }
+
+    @ExceptionHandler(ThumbnailUnavailableException.class)
+    public ResponseEntity<Void> handleUnavailableThumbnail(
+            ThumbnailUnavailableException exception
+    ) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .build();
     }
 }

@@ -18,17 +18,23 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class MemoryThumbnailService {
 
+    private static final Duration FFMPEG_TIMEOUT = Duration.ofSeconds(30);
+
     private final SnapMemoryRepository snapMemoryRepository;
     private final MemorySourceRepository memorySourceRepository;
     private final Path thumbnailDirectory;
     private final int maxWidth;
     private final int maxHeight;
+    private final String ffmpegPath;
+    private final int videoSeekSeconds;
 
     private final Map<String, Object> thumbnailLocks = new ConcurrentHashMap<>();
 
@@ -37,7 +43,9 @@ public class MemoryThumbnailService {
             MemorySourceRepository memorySourceRepository,
             @Value("${snapmemoria.thumbnail.directory}") String thumbnailDirectory,
             @Value("${snapmemoria.thumbnail.max-width}") int maxWidth,
-            @Value("${snapmemoria.thumbnail.max-height}") int maxHeight
+            @Value("${snapmemoria.thumbnail.max-height}") int maxHeight,
+            @Value("${snapmemoria.ffmpeg.path:ffmpeg}") String ffmpegPath,
+            @Value("${snapmemoria.thumbnail.video-seek-seconds:1}") int videoSeekSeconds
     ) {
         this.snapMemoryRepository = snapMemoryRepository;
         this.memorySourceRepository = memorySourceRepository;
@@ -46,6 +54,8 @@ public class MemoryThumbnailService {
                 .normalize();
         this.maxWidth = maxWidth;
         this.maxHeight = maxHeight;
+        this.ffmpegPath = ffmpegPath;
+        this.videoSeekSeconds = videoSeekSeconds;
     }
 
     public FileSystemResource getThumbnail(String memoryId) {
@@ -54,13 +64,6 @@ public class MemoryThumbnailService {
                         HttpStatus.NOT_FOUND,
                         "Memory not found."
                 ));
-
-        if (memory.getMediaType() != SnapMemoryType.IMAGE) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "Video thumbnails are not available yet."
-            );
-        }
 
         Path thumbnailPath = thumbnailDirectory.resolve(memory.getId() + ".jpg");
 
@@ -96,39 +99,131 @@ public class MemoryThumbnailService {
             SnapMemory memory,
             Path thumbnailPath
     ) {
-        Path mainImagePath = resolveSecureMediaPath(
+        Path mainMediaPath = resolveSecureMediaPath(
                 memory.getSourceId(),
                 memory.getMainPath(),
-                "The original image file is unavailable."
+                "The original media file is unavailable."
         );
 
+        if (memory.getMediaType() == SnapMemoryType.IMAGE) {
+            generateImageThumbnail(memory, mainMediaPath, thumbnailPath);
+            return;
+        }
+
+        if (memory.getMediaType() == SnapMemoryType.VIDEO) {
+            generateVideoThumbnail(mainMediaPath, thumbnailPath);
+            return;
+        }
+
+        throw new ThumbnailUnavailableException(
+                "This media type does not support thumbnails."
+        );
+    }
+
+    private void generateImageThumbnail(
+            SnapMemory memory,
+            Path mainImagePath,
+            Path thumbnailPath
+    ) {
         try {
             BufferedImage mainImage = ImageIO.read(mainImagePath.toFile());
 
             if (mainImage == null) {
-                throw new ResponseStatusException(
-                        HttpStatus.UNPROCESSABLE_ENTITY,
+                throw new ThumbnailUnavailableException(
                         "The original image format is not supported."
                 );
             }
 
-            BufferedImage imageWithOverlay = applyOverlayIfPresent(
-                    mainImage,
-                    memory
-            );
-
+            BufferedImage imageWithOverlay = applyOverlayIfPresent(mainImage, memory);
             BufferedImage thumbnail = resize(imageWithOverlay);
 
-            ImageIO.write(
-                    thumbnail,
-                    "jpg",
-                    thumbnailPath.toFile()
+            ImageIO.write(thumbnail, "jpg", thumbnailPath.toFile());
+        } catch (IOException exception) {
+            throw new ThumbnailUnavailableException(
+                    "Could not generate the image thumbnail.",
+                    exception
+            );
+        }
+    }
+
+    private void generateVideoThumbnail(
+            Path videoPath,
+            Path thumbnailPath
+    ) {
+        Path temporaryThumbnail = thumbnailDirectory.resolve(
+                videoPath.getFileName().toString() + ".tmp-" + System.nanoTime() + ".jpg"
+        );
+
+        List<String> command = List.of(
+                ffmpegPath,
+                "-hide_banner",
+                "-loglevel", "error",
+                "-ss", String.valueOf(videoSeekSeconds),
+                "-i", videoPath.toString(),
+                "-frames:v", "1",
+                "-vf", "scale=%d:%d:force_original_aspect_ratio=decrease"
+                        .formatted(maxWidth, maxHeight),
+                "-q:v", "4",
+                "-y",
+                temporaryThumbnail.toString()
+        );
+
+        Process process;
+
+        try {
+            process = new ProcessBuilder(command)
+                    .redirectErrorStream(true)
+                    .start();
+        } catch (IOException exception) {
+            throw new ThumbnailUnavailableException(
+                    "FFmpeg is unavailable. Install FFmpeg or configure snapmemoria.ffmpeg.path.",
+                    exception
+            );
+        }
+
+        try {
+            boolean completed = process.waitFor(
+                    FFMPEG_TIMEOUT.toSeconds(),
+                    java.util.concurrent.TimeUnit.SECONDS
+            );
+
+            if (!completed) {
+                process.destroyForcibly();
+
+                throw new ThumbnailUnavailableException(
+                        "FFmpeg timed out while generating a video thumbnail."
+                );
+            }
+
+            if (process.exitValue() != 0 || !Files.isRegularFile(temporaryThumbnail)) {
+                throw new ThumbnailUnavailableException(
+                        "FFmpeg could not generate a preview for this video."
+                );
+            }
+
+            Files.move(
+                    temporaryThumbnail,
+                    thumbnailPath,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            );
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+
+            throw new ThumbnailUnavailableException(
+                    "Video thumbnail generation was interrupted.",
+                    exception
             );
         } catch (IOException exception) {
-            throw new ResponseStatusException(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Could not generate the image thumbnail."
+            throw new ThumbnailUnavailableException(
+                    "Could not save the generated video thumbnail.",
+                    exception
             );
+        } finally {
+            try {
+                Files.deleteIfExists(temporaryThumbnail);
+            } catch (IOException ignored) {
+                // A temporary cache file can safely be cleaned up later.
+            }
         }
     }
 
