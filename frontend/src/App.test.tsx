@@ -1,4 +1,10 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MemorySource } from './api/types';
@@ -8,6 +14,7 @@ vi.mock('./api/snapmemoriaApi', () => ({
   createMemorySource: vi.fn(),
   deleteMemorySource: vi.fn(),
   getFlashbacksByDate: vi.fn(),
+  getDiagnostics: vi.fn(),
   getLatestMemorySourceScan: vi.fn().mockRejectedValue(new Error('No scan')),
   getMemories: vi.fn(),
   getMemoryDetail: vi.fn(),
@@ -24,19 +31,62 @@ vi.mock('./api/snapmemoriaApi', () => ({
 
 import {
   createMemorySource,
+  getDiagnostics,
+  getMemories,
+  getMemoryDetail,
   getMemorySources,
+  getTimelineMonths,
   selectMemorySourceFolder,
   startMemorySourceScan,
   getTimelineYears,
 } from './api/snapmemoriaApi';
 
 const createMemorySourceMock = vi.mocked(createMemorySource);
+const getDiagnosticsMock = vi.mocked(getDiagnostics);
+const getMemoriesMock = vi.mocked(getMemories);
+const getMemoryDetailMock = vi.mocked(getMemoryDetail);
 const getMemorySourcesMock = vi.mocked(getMemorySources);
+const getTimelineMonthsMock = vi.mocked(getTimelineMonths);
 const selectMemorySourceFolderMock = vi.mocked(selectMemorySourceFolder);
 const startMemorySourceScanMock = vi.mocked(startMemorySourceScan);
 const getTimelineYearsMock = vi.mocked(getTimelineYears);
 
 beforeEach(() => {
+  getDiagnosticsMock.mockResolvedValue({
+    appVersion: '0.1.0',
+    platform: null,
+    videoPreviews: {
+      available: true,
+      source: 'BUNDLED',
+      message: 'Using bundled FFmpeg.',
+    },
+    sources: {
+      configured: 0,
+      available: 0,
+      unavailable: 0,
+    },
+    database: {
+      status: 'READY',
+    },
+  });
+  getMemoriesMock.mockResolvedValue({
+    content: [],
+    page: 0,
+    size: 48,
+    totalElements: 0,
+    totalPages: 0,
+  });
+  getMemoryDetailMock.mockResolvedValue({
+    id: 'memory-video',
+    capturedAt: '2026-01-01',
+    mediaType: 'VIDEO',
+    hasOverlay: false,
+    fileSizeBytes: 1024,
+    lastModifiedAt: '2026-01-01T00:00:00Z',
+    mediaUrl: '/api/memories/memory-video/media',
+    overlayUrl: null,
+  });
+  getTimelineMonthsMock.mockResolvedValue([]);
   getTimelineYearsMock.mockResolvedValue([]);
   selectMemorySourceFolderMock.mockResolvedValue({
     selected: false,
@@ -227,5 +277,49 @@ describe('App footer', () => {
       'href',
       'https://www.linkedin.com/in/cnoupoue',
     );
+  });
+});
+
+describe('App video preview fallback', () => {
+  it('renders a clickable fallback when a video thumbnail is unavailable', async () => {
+    const user = userEvent.setup();
+
+    getMemorySourcesMock.mockResolvedValue([buildSource()]);
+    getTimelineYearsMock.mockResolvedValue([{ year: 2026, memoryCount: 1 }]);
+    getMemoriesMock.mockResolvedValue({
+      content: [
+        {
+          id: 'memory-video',
+          capturedAt: '2026-01-01',
+          mediaType: 'VIDEO',
+          hasOverlay: false,
+          fileSizeBytes: 1024,
+          lastModifiedAt: '2026-01-01T00:00:00Z',
+          thumbnailUrl: '/api/memories/memory-video/thumbnail',
+        },
+      ],
+      page: 0,
+      size: 48,
+      totalElements: 1,
+      totalPages: 1,
+    });
+
+    render(<App />);
+
+    const thumbnail = await screen.findByAltText(
+      'Snapchat Memory from 2026-01-01',
+    );
+    fireEvent.error(thumbnail);
+
+    expect(screen.getByText('Video preview unavailable')).toBeInTheDocument();
+    expect(screen.getByText('Open video')).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Open Memory from 2026-01-01' }),
+    );
+
+    await waitFor(() => {
+      expect(getMemoryDetailMock).toHaveBeenCalledWith('memory-video');
+    });
   });
 });

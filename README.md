@@ -28,6 +28,10 @@ SnapMemoria is designed to be local-first.
 * The application runs on your computer by default.
 * Local paths, SQLite databases, thumbnails, and personal exports should never be committed to Git.
 
+## Beta issue reports
+
+When reporting an issue, use **Settings → Copy diagnostic information** and include the copied report. Do not share personal archive paths, filenames, photos, or videos.
+
 ## Getting started
 
 ### Requirements
@@ -35,7 +39,7 @@ SnapMemoria is designed to be local-first.
 * Java 21 or later
 * Node.js 22 or later
 * npm
-* FFmpeg for video thumbnails
+* FFmpeg for video thumbnails during development
 * Git
 * Make
 
@@ -50,6 +54,8 @@ Verify the installation:
 ```bash
 ffmpeg -version
 ```
+
+Video playback does not depend on FFmpeg. If FFmpeg is unavailable, SnapMemoria continues to browse and open original videos, but video preview thumbnails are shown with a fallback state. Development can use FFmpeg from the system `PATH` or an explicit `snapmemoria.ffmpeg.path` value.
 
 ### Clone and install
 
@@ -221,7 +227,15 @@ dist/app/SnapMemoria.app
 dist/installers/SnapMemoria-<version>-macos-arm64.dmg
 ```
 
-The package includes a bundled Java runtime and the production JAR with the React frontend embedded. It is intended for macOS Apple Silicon, and it is unsigned and not notarized yet. macOS may show a security warning for unsigned local builds. Code signing and notarization are planned future release steps.
+The package includes a bundled Java runtime, the production JAR with the React frontend embedded, and a verified macOS arm64 FFmpeg binary when present at `packaging/macos/ffmpeg/arm64/ffmpeg`. FFmpeg is used only for video thumbnail generation; original videos still open if preview generation is unavailable.
+
+Before public distribution, maintainers must verify the FFmpeg source, architecture, checksum, license configuration, and third-party notices. The packaging flow intentionally does not download FFmpeg automatically:
+
+```bash
+make check-bundled-ffmpeg
+```
+
+The package is intended for macOS Apple Silicon, and it is unsigned and not notarized yet. macOS may show a security warning for unsigned local builds. Code signing and notarization are planned future release steps.
 
 Format the complete project:
 

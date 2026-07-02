@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import be.cnoupoue.snapmemoria.ffmpeg.FfmpegPathResolver;
+import be.cnoupoue.snapmemoria.ffmpeg.FfmpegResolution;
+import be.cnoupoue.snapmemoria.ffmpeg.FfmpegSource;
 import be.cnoupoue.snapmemoria.memory.SnapMemory;
 import be.cnoupoue.snapmemoria.memory.SnapMemoryRepository;
 import be.cnoupoue.snapmemoria.memory.SnapMemoryType;
@@ -41,7 +44,8 @@ class MemoryThumbnailServiceTest {
         memory("memory-1", SnapMemoryType.IMAGE, sourceImage.toString(), overlayImage.toString());
     FakeSecureMemoryPathResolver secureMemoryPathResolver = new FakeSecureMemoryPathResolver();
     MemoryThumbnailService service =
-        service(thumbnailDirectory, 480, 480, secureMemoryPathResolver);
+        service(
+            thumbnailDirectory, 480, 480, secureMemoryPathResolver, unavailableFfmpegResolver());
 
     when(snapMemoryRepository.findById(memory.getId())).thenReturn(Optional.of(memory));
     secureMemoryPathResolver.register(memory.getSourceId(), memory.getMainPath(), sourceImage);
@@ -67,7 +71,8 @@ class MemoryThumbnailServiceTest {
     SnapMemory memory = memory("memory-cached", SnapMemoryType.IMAGE, "main.jpg", null);
     FakeSecureMemoryPathResolver secureMemoryPathResolver = new FakeSecureMemoryPathResolver();
     MemoryThumbnailService service =
-        service(thumbnailDirectory, 480, 480, secureMemoryPathResolver);
+        service(
+            thumbnailDirectory, 480, 480, secureMemoryPathResolver, unavailableFfmpegResolver());
 
     when(snapMemoryRepository.findById(memory.getId())).thenReturn(Optional.of(memory));
 
@@ -80,7 +85,12 @@ class MemoryThumbnailServiceTest {
   @Test
   void throwsNotFoundWhenMemoryIsMissing() {
     MemoryThumbnailService service =
-        service(temporaryDirectory.resolve("thumbs"), 480, 480, new FakeSecureMemoryPathResolver());
+        service(
+            temporaryDirectory.resolve("thumbs"),
+            480,
+            480,
+            new FakeSecureMemoryPathResolver(),
+            unavailableFfmpegResolver());
 
     when(snapMemoryRepository.findById("missing")).thenReturn(Optional.empty());
 
@@ -96,7 +106,12 @@ class MemoryThumbnailServiceTest {
         memory("memory-invalid", SnapMemoryType.IMAGE, invalidImage.toString(), null);
     FakeSecureMemoryPathResolver secureMemoryPathResolver = new FakeSecureMemoryPathResolver();
     MemoryThumbnailService service =
-        service(temporaryDirectory.resolve("thumbs"), 480, 480, secureMemoryPathResolver);
+        service(
+            temporaryDirectory.resolve("thumbs"),
+            480,
+            480,
+            secureMemoryPathResolver,
+            unavailableFfmpegResolver());
 
     when(snapMemoryRepository.findById(memory.getId())).thenReturn(Optional.of(memory));
     secureMemoryPathResolver.register(memory.getSourceId(), memory.getMainPath(), invalidImage);
@@ -106,18 +121,67 @@ class MemoryThumbnailServiceTest {
         .hasMessage("The original image format is not supported.");
   }
 
+  @Test
+  void videoThumbnailGenerationUsesResolvedFfmpegExecutable() throws Exception {
+    Path sourceVideo = Files.writeString(temporaryDirectory.resolve("main.mp4"), "video");
+    Path fakeFfmpeg = writeFakeFfmpeg(temporaryDirectory.resolve("ffmpeg"));
+    Path thumbnailDirectory = temporaryDirectory.resolve("thumbs");
+    SnapMemory memory = memory("memory-video", SnapMemoryType.VIDEO, sourceVideo.toString(), null);
+    FakeSecureMemoryPathResolver secureMemoryPathResolver = new FakeSecureMemoryPathResolver();
+    MemoryThumbnailService service =
+        service(
+            thumbnailDirectory,
+            480,
+            480,
+            secureMemoryPathResolver,
+            resolver(
+                FfmpegResolution.available(
+                    fakeFfmpeg, FfmpegSource.CONFIGURED, "Using configured FFmpeg.")));
+
+    when(snapMemoryRepository.findById(memory.getId())).thenReturn(Optional.of(memory));
+    secureMemoryPathResolver.register(memory.getSourceId(), memory.getMainPath(), sourceVideo);
+
+    var thumbnail = service.getThumbnail(memory.getId());
+
+    assertThat(thumbnail.getFile()).exists();
+  }
+
+  @Test
+  void missingFfmpegReturnsVideoThumbnailUnavailable() throws Exception {
+    Path sourceVideo = Files.writeString(temporaryDirectory.resolve("main.mp4"), "video");
+    SnapMemory memory =
+        memory("memory-video-unavailable", SnapMemoryType.VIDEO, sourceVideo.toString(), null);
+    FakeSecureMemoryPathResolver secureMemoryPathResolver = new FakeSecureMemoryPathResolver();
+    MemoryThumbnailService service =
+        service(
+            temporaryDirectory.resolve("thumbs"),
+            480,
+            480,
+            secureMemoryPathResolver,
+            unavailableFfmpegResolver());
+
+    when(snapMemoryRepository.findById(memory.getId())).thenReturn(Optional.of(memory));
+    secureMemoryPathResolver.register(memory.getSourceId(), memory.getMainPath(), sourceVideo);
+
+    assertThatThrownBy(() -> service.getThumbnail(memory.getId()))
+        .isInstanceOf(VideoThumbnailUnavailableException.class)
+        .hasMessage(
+            "Video preview generation is unavailable, but the original video can still be opened.");
+  }
+
   private MemoryThumbnailService service(
       Path thumbnailDirectory,
       int maxWidth,
       int maxHeight,
-      SecureMemoryPathResolver secureMemoryPathResolver) {
+      SecureMemoryPathResolver secureMemoryPathResolver,
+      FfmpegPathResolver ffmpegPathResolver) {
     return new MemoryThumbnailService(
         snapMemoryRepository,
         secureMemoryPathResolver,
+        ffmpegPathResolver,
         thumbnailDirectory.toString(),
         maxWidth,
         maxHeight,
-        "ffmpeg",
         1);
   }
 
@@ -137,6 +201,21 @@ class MemoryThumbnailServiceTest {
     return path;
   }
 
+  private Path writeFakeFfmpeg(Path path) throws Exception {
+    Files.writeString(
+        path,
+        "#!/bin/sh\n"
+            + "output=\"\"\n"
+            + "for arg in \"$@\"; do\n"
+            + "  output=\"$arg\"\n"
+            + "done\n"
+            + "printf 'fake thumbnail' > \"$output\"\n"
+            + "exit 0\n");
+    path.toFile().setExecutable(true);
+
+    return path.toAbsolutePath().normalize();
+  }
+
   private SnapMemory memory(
       String id, SnapMemoryType mediaType, String mainPath, String overlayPath) {
     String now = Instant.now().toString();
@@ -153,6 +232,19 @@ class MemoryThumbnailServiceTest {
         now,
         now,
         now);
+  }
+
+  private FfmpegPathResolver unavailableFfmpegResolver() {
+    return resolver(FfmpegResolution.unavailable("Original videos can still be opened."));
+  }
+
+  private FfmpegPathResolver resolver(FfmpegResolution resolution) {
+    return new FfmpegPathResolver("", Optional::empty, "") {
+      @Override
+      public FfmpegResolution resolve() {
+        return resolution;
+      }
+    };
   }
 
   private static class FakeSecureMemoryPathResolver extends SecureMemoryPathResolver {

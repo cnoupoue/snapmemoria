@@ -1,5 +1,6 @@
 import type {
   CreateMemorySourceRequest,
+  Diagnostics,
   FlashbackResponse,
   FolderSelection,
   MemoryDetail,
@@ -23,6 +24,8 @@ const ERROR_MESSAGES: Record<string, string> = {
     'Folder selection is unavailable in this environment. Enter the folder path manually.',
   SOURCE_UNAVAILABLE:
     'The configured source folder is currently unavailable. Connect the drive containing this source, then refresh its status.',
+  VIDEO_THUMBNAIL_UNAVAILABLE:
+    'Video preview generation is unavailable, but the original video can still be opened.',
 };
 
 export class SnapmemoriaApiError extends Error {
@@ -105,6 +108,10 @@ export function getFlashbacksByDate(date: string): Promise<FlashbackResponse> {
 
 export function getMemorySources(): Promise<MemorySource[]> {
   return request<MemorySource[]>('/api/sources');
+}
+
+export function getDiagnostics(): Promise<Diagnostics> {
+  return request<Diagnostics>('/api/diagnostics');
 }
 
 export function selectMemorySourceFolder(): Promise<FolderSelection> {

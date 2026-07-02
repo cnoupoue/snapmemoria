@@ -125,7 +125,7 @@ Install:
 * Java 21
 * Node.js 22 or later
 * npm
-* FFmpeg
+* FFmpeg for development video thumbnails, optional when video previews are not needed
 * Git
 
 On macOS, FFmpeg can be installed with:
@@ -139,6 +139,8 @@ Verify the installation:
 ```bash
 ffmpeg -version
 ```
+
+FFmpeg is used only for video thumbnail generation. Original video playback works through the media streaming endpoint even when FFmpeg is unavailable. During development, SnapMemoria resolves FFmpeg from `snapmemoria.ffmpeg.path` first, then a packaged app bundle location if present, then the system `PATH`.
 
 ## Initial setup
 
@@ -290,10 +292,14 @@ Generates thumbnails lazily.
 
 * Images are resized using Java image APIs.
 * Image overlays are applied to image thumbnails.
-* Video thumbnails are generated with FFmpeg.
+* Video thumbnails are generated with FFmpeg when available.
 * Generated previews are stored in the local thumbnail cache.
 
 Original media files must never be modified.
+
+If FFmpeg is unavailable, video thumbnail requests return `VIDEO_THUMBNAIL_UNAVAILABLE` and the frontend shows a video fallback while keeping the original video openable.
+
+Packaged macOS Apple Silicon releases can bundle FFmpeg at `packaging/macos/ffmpeg/arm64/ffmpeg`. Public binary distribution requires a verified source, architecture, checksum, license configuration, and matching third-party notices. The packaging flow does not download FFmpeg automatically.
 
 ## Database migrations
 

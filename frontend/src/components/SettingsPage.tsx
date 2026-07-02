@@ -8,6 +8,7 @@ import {
 import {
   createMemorySource,
   deleteMemorySource,
+  getDiagnostics,
   getLatestMemorySourceScan,
   getMemoryScanJob,
   getMemorySourceAvailability,
@@ -19,6 +20,7 @@ import {
 import type {
   MemorySource,
   MemoryScanJob,
+  Diagnostics,
   SourceAvailabilityStatus,
 } from '../api/types';
 
@@ -78,6 +80,74 @@ function getSourceStateLabel(
   return getAvailabilityLabel(source.availabilityStatus);
 }
 
+function getVideoPreviewStatus(diagnostics: Diagnostics): string {
+  return diagnostics.videoPreviews.available ? 'Ready' : 'Unavailable';
+}
+
+function getFfmpegSourceLabel(source: Diagnostics['videoPreviews']['source']) {
+  switch (source) {
+    case 'BUNDLED':
+      return 'Bundled';
+    case 'SYSTEM':
+      return 'System';
+    case 'CONFIGURED':
+      return 'Configured';
+    case 'UNAVAILABLE':
+      return 'Unavailable';
+  }
+}
+
+function getFfmpegStatusText(diagnostics: Diagnostics): string {
+  if (!diagnostics.videoPreviews.available) {
+    return 'Original videos can still be opened.';
+  }
+
+  switch (diagnostics.videoPreviews.source) {
+    case 'BUNDLED':
+      return 'Using bundled FFmpeg';
+    case 'SYSTEM':
+      return 'Using system FFmpeg';
+    case 'CONFIGURED':
+      return 'Using configured FFmpeg';
+    case 'UNAVAILABLE':
+      return 'Original videos can still be opened.';
+  }
+}
+
+function formatConfiguredSources(count: number): string {
+  return `Sources: ${count.toLocaleString()} configured`;
+}
+
+function formatDatabaseStatus(status: string): string {
+  return status
+    .toLowerCase()
+    .replaceAll('_', ' ')
+    .replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
+}
+
+function buildDiagnosticReport(diagnostics: Diagnostics): string {
+  const lines = [
+    'SnapMemoria diagnostics',
+    '',
+    `App version: ${diagnostics.appVersion}`,
+  ];
+
+  if (diagnostics.platform) {
+    lines.push(`Platform: ${diagnostics.platform}`);
+  }
+
+  lines.push(
+    `Video previews: ${getVideoPreviewStatus(diagnostics)}`,
+    `FFmpeg source: ${getFfmpegSourceLabel(diagnostics.videoPreviews.source)}`,
+    `Configured sources: ${diagnostics.sources.configured}`,
+    `Available sources: ${diagnostics.sources.available}`,
+    `Unavailable sources: ${diagnostics.sources.unavailable}`,
+    `Local database: ${formatDatabaseStatus(diagnostics.database.status)}`,
+  );
+
+  return lines.join('\n');
+}
+
 type SettingsPageProps = {
   autoOpenFolderPicker?: boolean;
   autoFocusSourceForm?: boolean;
@@ -113,6 +183,12 @@ export function SettingsPage({
   );
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [scanJob, setScanJob] = useState<MemoryScanJob | null>(null);
+  const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
+  const [isDiagnosticsLoading, setIsDiagnosticsLoading] = useState(true);
+  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
+  const [copyDiagnosticsStatus, setCopyDiagnosticsStatus] = useState<
+    'idle' | 'copied' | 'failed'
+  >('idle');
 
   const pollingIntervalRef = useRef<number | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
@@ -170,6 +246,20 @@ export function SettingsPage({
     }
   }, []);
 
+  const loadDiagnostics = useCallback(async () => {
+    setIsDiagnosticsLoading(true);
+    setDiagnosticsError(null);
+
+    try {
+      setDiagnostics(await getDiagnostics());
+    } catch {
+      setDiagnostics(null);
+      setDiagnosticsError('Diagnostic information is temporarily unavailable.');
+    } finally {
+      setIsDiagnosticsLoading(false);
+    }
+  }, []);
+
   const stopPolling = useCallback(() => {
     if (pollingIntervalRef.current !== null) {
       window.clearInterval(pollingIntervalRef.current);
@@ -183,6 +273,7 @@ export function SettingsPage({
       setScanningSourceId(null);
 
       await loadSources();
+      await loadDiagnostics();
 
       if (job.status === 'COMPLETED') {
         onSourceScanned();
@@ -191,7 +282,7 @@ export function SettingsPage({
 
       setError(job.errorMessage ?? 'The scan failed unexpectedly.');
     },
-    [loadSources, onSourceScanned, stopPolling],
+    [loadDiagnostics, loadSources, onSourceScanned, stopPolling],
   );
 
   const startPolling = useCallback(
@@ -272,18 +363,23 @@ export function SettingsPage({
           setIsLoading(false);
         }
       }
+
+      if (isMounted) {
+        await loadDiagnostics();
+      }
     })();
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [loadDiagnostics]);
 
   function handleRefreshSources() {
     setIsLoading(true);
     setError(null);
     setSuccessMessage(null);
     void loadSources();
+    void loadDiagnostics();
   }
 
   async function handleRefreshSourceAvailability(source: MemorySource) {
@@ -298,6 +394,7 @@ export function SettingsPage({
           item.id === source.id ? { ...item, ...availability } : item,
         ),
       );
+      await loadDiagnostics();
     } catch {
       setError('Could not refresh this source status.');
     } finally {
@@ -352,6 +449,7 @@ export function SettingsPage({
       });
 
       upsertSource(createdSource);
+      await loadDiagnostics();
       setSuccessMessage('Your source was added. Scanning Memories locally…');
       onSourceCreated?.(createdSource);
 
@@ -433,12 +531,33 @@ export function SettingsPage({
       setSources((currentSources) =>
         currentSources.filter((item) => item.id !== source.id),
       );
+      await loadDiagnostics();
       onSourceDeleted?.(source.id);
       onSourceScanned();
     } catch {
       setError('Could not remove this source.');
     } finally {
       setDeletingSourceId(null);
+    }
+  }
+
+  async function handleCopyDiagnostics() {
+    setCopyDiagnosticsStatus('idle');
+
+    if (!diagnostics || !navigator.clipboard?.writeText) {
+      setCopyDiagnosticsStatus('failed');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(buildDiagnosticReport(diagnostics));
+      setCopyDiagnosticsStatus('copied');
+
+      window.setTimeout(() => {
+        setCopyDiagnosticsStatus('idle');
+      }, 2400);
+    } catch {
+      setCopyDiagnosticsStatus('failed');
     }
   }
 
@@ -502,6 +621,84 @@ export function SettingsPage({
           )}
         </div>
       )}
+
+      <section className="settings-section">
+        <div className="settings-section-header">
+          <div>
+            <p className="eyebrow">Beta support</p>
+            <h3>Diagnostics</h3>
+          </div>
+
+          <button
+            className="secondary-button"
+            disabled={isDiagnosticsLoading}
+            onClick={() => void loadDiagnostics()}
+            type="button"
+          >
+            {isDiagnosticsLoading ? 'Checking…' : 'Refresh'}
+          </button>
+        </div>
+
+        {isDiagnosticsLoading && !diagnostics && (
+          <div className="state-message">Checking diagnostics…</div>
+        )}
+
+        {diagnosticsError && !diagnostics && (
+          <div className="state-message">{diagnosticsError}</div>
+        )}
+
+        {diagnostics && (
+          <>
+            <dl className="diagnostics-grid">
+              <div>
+                <dt>Application</dt>
+                <dd>SnapMemoria {diagnostics.appVersion}</dd>
+              </div>
+              <div>
+                <dt>Video previews</dt>
+                <dd>{getVideoPreviewStatus(diagnostics)}</dd>
+              </div>
+              <div>
+                <dt>FFmpeg</dt>
+                <dd>{getFfmpegStatusText(diagnostics)}</dd>
+              </div>
+              <div>
+                <dt>Sources</dt>
+                <dd>
+                  {formatConfiguredSources(diagnostics.sources.configured)}
+                </dd>
+              </div>
+              <div>
+                <dt>Local database</dt>
+                <dd>{formatDatabaseStatus(diagnostics.database.status)}</dd>
+              </div>
+            </dl>
+
+            <div className="diagnostics-actions">
+              <button
+                className="primary-button"
+                onClick={() => void handleCopyDiagnostics()}
+                type="button"
+              >
+                Copy diagnostic information
+              </button>
+
+              {copyDiagnosticsStatus === 'copied' && (
+                <span className="diagnostic-copy-status">
+                  Diagnostic information copied
+                </span>
+              )}
+
+              {copyDiagnosticsStatus === 'failed' && (
+                <span className="diagnostic-copy-status">
+                  Copying is unavailable in this browser. Select and copy the
+                  visible diagnostic details instead.
+                </span>
+              )}
+            </div>
+          </>
+        )}
+      </section>
 
       <section className="settings-section">
         <div className="settings-section-header">

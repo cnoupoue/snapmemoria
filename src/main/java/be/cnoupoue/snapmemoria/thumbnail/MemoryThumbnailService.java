@@ -1,5 +1,7 @@
 package be.cnoupoue.snapmemoria.thumbnail;
 
+import be.cnoupoue.snapmemoria.ffmpeg.FfmpegPathResolver;
+import be.cnoupoue.snapmemoria.ffmpeg.FfmpegResolution;
 import be.cnoupoue.snapmemoria.memory.SnapMemory;
 import be.cnoupoue.snapmemoria.memory.SnapMemoryRepository;
 import be.cnoupoue.snapmemoria.memory.SnapMemoryType;
@@ -28,10 +30,10 @@ public class MemoryThumbnailService {
 
   private final SnapMemoryRepository snapMemoryRepository;
   private final SecureMemoryPathResolver secureMemoryPathResolver;
+  private final FfmpegPathResolver ffmpegPathResolver;
   private final Path thumbnailDirectory;
   private final int maxWidth;
   private final int maxHeight;
-  private final String ffmpegPath;
   private final int videoSeekSeconds;
 
   private final Map<String, Object> thumbnailLocks = new ConcurrentHashMap<>();
@@ -39,17 +41,17 @@ public class MemoryThumbnailService {
   public MemoryThumbnailService(
       SnapMemoryRepository snapMemoryRepository,
       SecureMemoryPathResolver secureMemoryPathResolver,
+      FfmpegPathResolver ffmpegPathResolver,
       @Value("${snapmemoria.thumbnail.directory}") String thumbnailDirectory,
       @Value("${snapmemoria.thumbnail.max-width}") int maxWidth,
       @Value("${snapmemoria.thumbnail.max-height}") int maxHeight,
-      @Value("${snapmemoria.ffmpeg.path:ffmpeg}") String ffmpegPath,
       @Value("${snapmemoria.thumbnail.video-seek-seconds:1}") int videoSeekSeconds) {
     this.snapMemoryRepository = snapMemoryRepository;
     this.secureMemoryPathResolver = secureMemoryPathResolver;
+    this.ffmpegPathResolver = ffmpegPathResolver;
     this.thumbnailDirectory = Path.of(thumbnailDirectory).toAbsolutePath().normalize();
     this.maxWidth = maxWidth;
     this.maxHeight = maxHeight;
-    this.ffmpegPath = ffmpegPath;
     this.videoSeekSeconds = videoSeekSeconds;
   }
 
@@ -124,13 +126,19 @@ public class MemoryThumbnailService {
   }
 
   private void generateVideoThumbnail(Path videoPath, Path thumbnailPath) {
+    FfmpegResolution ffmpegResolution = ffmpegPathResolver.resolve();
+
+    if (!ffmpegResolution.available()) {
+      throw new VideoThumbnailUnavailableException();
+    }
+
     Path temporaryThumbnail =
         thumbnailDirectory.resolve(
             videoPath.getFileName().toString() + ".tmp-" + System.nanoTime() + ".jpg");
 
     List<String> command =
         List.of(
-            ffmpegPath,
+            ffmpegResolution.executablePath().toString(),
             "-hide_banner",
             "-loglevel",
             "error",
@@ -152,8 +160,7 @@ public class MemoryThumbnailService {
     try {
       process = new ProcessBuilder(command).redirectErrorStream(true).start();
     } catch (IOException exception) {
-      throw new ThumbnailUnavailableException(
-          "FFmpeg is unavailable. Install FFmpeg or configure snapmemoria.ffmpeg.path.", exception);
+      throw new VideoThumbnailUnavailableException();
     }
 
     try {

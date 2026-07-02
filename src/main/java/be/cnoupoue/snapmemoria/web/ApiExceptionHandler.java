@@ -1,5 +1,6 @@
 package be.cnoupoue.snapmemoria.web;
 
+import be.cnoupoue.snapmemoria.thumbnail.ThumbnailUnavailableException;
 import java.time.Instant;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +26,15 @@ public class ApiExceptionHandler {
             : exception.getReason();
 
     return buildResponse(status, status.name(), message);
+  }
+
+  @ExceptionHandler(ThumbnailUnavailableException.class)
+  public ResponseEntity<ApiErrorResponse> handleThumbnailUnavailableException(
+      ThumbnailUnavailableException exception) {
+    return buildResponse(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        "THUMBNAIL_UNAVAILABLE",
+        "Preview generation is unavailable for this memory.");
   }
 
   @ExceptionHandler(IllegalArgumentException.class)

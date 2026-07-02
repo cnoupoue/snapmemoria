@@ -108,3 +108,27 @@ export type MemoryScanJob = {
   completedAt: string | null;
   updatedAt: string;
 };
+
+export type VideoPreviewDiagnostics = {
+  available: boolean;
+  source: 'CONFIGURED' | 'BUNDLED' | 'SYSTEM' | 'UNAVAILABLE';
+  message: string;
+};
+
+export type SourceDiagnostics = {
+  configured: number;
+  available: number;
+  unavailable: number;
+};
+
+export type DatabaseDiagnostics = {
+  status: 'READY' | string;
+};
+
+export type Diagnostics = {
+  appVersion: string;
+  platform: string | null;
+  videoPreviews: VideoPreviewDiagnostics;
+  sources: SourceDiagnostics;
+  database: DatabaseDiagnostics;
+};

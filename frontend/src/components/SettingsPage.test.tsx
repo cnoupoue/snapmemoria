@@ -1,12 +1,13 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { MemorySource } from '../api/types';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Diagnostics, MemorySource } from '../api/types';
 import { SettingsPage } from './SettingsPage';
 
 vi.mock('../api/snapmemoriaApi', () => ({
   createMemorySource: vi.fn(),
   deleteMemorySource: vi.fn(),
+  getDiagnostics: vi.fn(),
   getLatestMemorySourceScan: vi.fn().mockRejectedValue(new Error('No scan')),
   getMemoryScanJob: vi.fn(),
   getMemorySourceAvailability: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock('../api/snapmemoriaApi', () => ({
 import {
   createMemorySource,
   deleteMemorySource,
+  getDiagnostics,
   getMemorySourceAvailability,
   getMemorySources,
   selectMemorySourceFolder,
@@ -44,13 +46,28 @@ import {
 
 const createMemorySourceMock = vi.mocked(createMemorySource);
 const deleteMemorySourceMock = vi.mocked(deleteMemorySource);
+const getDiagnosticsMock = vi.mocked(getDiagnostics);
 const getMemorySourcesMock = vi.mocked(getMemorySources);
 const getMemorySourceAvailabilityMock = vi.mocked(getMemorySourceAvailability);
 const selectMemorySourceFolderMock = vi.mocked(selectMemorySourceFolder);
 const startMemorySourceScanMock = vi.mocked(startMemorySourceScan);
 
+beforeEach(() => {
+  getDiagnosticsMock.mockResolvedValue(
+    buildDiagnostics({
+      available: true,
+      source: 'BUNDLED',
+      message: 'Using bundled FFmpeg.',
+    }),
+  );
+});
+
 afterEach(() => {
   cleanup();
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: undefined,
+  });
   vi.restoreAllMocks();
   vi.clearAllMocks();
 });
@@ -67,6 +84,31 @@ function buildSource(source: Partial<MemorySource>): MemorySource {
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
     ...source,
+  };
+}
+
+function buildDiagnostics(
+  videoPreviews: Partial<Diagnostics['videoPreviews']> = {},
+  sources: Partial<Diagnostics['sources']> = {},
+): Diagnostics {
+  return {
+    appVersion: '0.1.0',
+    platform: null,
+    videoPreviews: {
+      available: true,
+      source: 'BUNDLED',
+      message: 'Using bundled FFmpeg.',
+      ...videoPreviews,
+    },
+    sources: {
+      configured: 1,
+      available: 1,
+      unavailable: 0,
+      ...sources,
+    },
+    database: {
+      status: 'READY',
+    },
   };
 }
 
@@ -201,6 +243,162 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('button', { name: 'Scan source' })).toBeEnabled();
   });
 
+  it('shows ready video preview diagnostics when FFmpeg is available', async () => {
+    getMemorySourcesMock.mockResolvedValue([]);
+    getDiagnosticsMock.mockResolvedValue(
+      buildDiagnostics(
+        {
+          available: true,
+          source: 'BUNDLED',
+          message: 'Using bundled FFmpeg.',
+        },
+        {
+          configured: 1,
+          available: 1,
+          unavailable: 0,
+        },
+      ),
+    );
+
+    render(<SettingsPage onSourceScanned={vi.fn()} />);
+
+    expect(await screen.findByText('SnapMemoria 0.1.0')).toBeInTheDocument();
+    expect(screen.getAllByText('Ready')).toHaveLength(2);
+    expect(screen.getByText('Using bundled FFmpeg')).toBeInTheDocument();
+    expect(screen.getByText('Sources: 1 configured')).toBeInTheDocument();
+  });
+
+  it('renders bundled FFmpeg diagnostics', async () => {
+    getMemorySourcesMock.mockResolvedValue([]);
+    getDiagnosticsMock.mockResolvedValue(
+      buildDiagnostics({
+        available: true,
+        source: 'BUNDLED',
+        message: 'Using bundled FFmpeg.',
+      }),
+    );
+
+    render(<SettingsPage onSourceScanned={vi.fn()} />);
+
+    expect(await screen.findByText('Using bundled FFmpeg')).toBeInTheDocument();
+  });
+
+  it('shows safe unavailable video preview diagnostics', async () => {
+    getMemorySourcesMock.mockResolvedValue([]);
+    getDiagnosticsMock.mockResolvedValue(
+      buildDiagnostics({
+        available: false,
+        source: 'UNAVAILABLE',
+        message: 'Original videos can still be opened.',
+      }),
+    );
+
+    render(<SettingsPage onSourceScanned={vi.fn()} />);
+
+    expect(await screen.findByText('Video previews')).toBeInTheDocument();
+    expect(screen.getByText('Unavailable')).toBeInTheDocument();
+    expect(
+      screen.getByText('Original videos can still be opened.'),
+    ).toBeInTheDocument();
+  });
+
+  it('copies sanitized diagnostic text to the clipboard', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    getMemorySourcesMock.mockResolvedValue([]);
+    getDiagnosticsMock.mockResolvedValue(
+      buildDiagnostics(
+        {
+          available: true,
+          source: 'BUNDLED',
+          message: 'Using bundled FFmpeg.',
+        },
+        {
+          configured: 1,
+          available: 1,
+          unavailable: 0,
+        },
+      ),
+    );
+
+    render(<SettingsPage onSourceScanned={vi.fn()} />);
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Copy diagnostic information',
+      }),
+    );
+
+    expect(writeText).toHaveBeenCalledWith(`SnapMemoria diagnostics
+
+App version: 0.1.0
+Video previews: Ready
+FFmpeg source: Bundled
+Configured sources: 1
+Available sources: 1
+Unavailable sources: 0
+Local database: Ready`);
+    expect(
+      screen.getByText('Diagnostic information copied'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows a safe fallback message when clipboard writing fails', async () => {
+    const user = userEvent.setup();
+
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+    });
+    getMemorySourcesMock.mockResolvedValue([]);
+
+    render(<SettingsPage onSourceScanned={vi.fn()} />);
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Copy diagnostic information',
+      }),
+    );
+
+    expect(
+      screen.getByText(
+        'Copying is unavailable in this browser. Select and copy the visible diagnostic details instead.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('never copies source names or paths in the diagnostic report', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    getMemorySourcesMock.mockResolvedValue([buildSource({})]);
+
+    render(<SettingsPage onSourceScanned={vi.fn()} />);
+
+    expect(await screen.findByText('Snapchat USB')).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Copy diagnostic information',
+      }),
+    );
+
+    const copiedReport = writeText.mock.calls[0][0] as string;
+
+    expect(copiedReport).not.toContain('Snapchat USB');
+    expect(copiedReport).not.toContain('/Volumes/SNAP');
+    expect(copiedReport).not.toContain('snapchat-memories');
+  });
+
   it('renders unavailable source status', async () => {
     getMemorySourcesMock.mockResolvedValue([
       buildSource({
@@ -263,6 +461,9 @@ describe('SettingsPage', () => {
       expect(screen.getByText('Available')).toBeInTheDocument();
     });
     expect(getMemorySourceAvailabilityMock).toHaveBeenCalledWith('source-1');
+    await waitFor(() => {
+      expect(getDiagnosticsMock).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('starts scanning automatically after adding a source', async () => {

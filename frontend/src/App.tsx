@@ -567,6 +567,12 @@ function App() {
                                 ? 'Video preview unavailable'
                                 : 'Image preview unavailable'}
                             </span>
+
+                            {memory.mediaType === 'VIDEO' && (
+                              <span className="memory-video-placeholder-action">
+                                Open video
+                              </span>
+                            )}
                           </div>
 
                           {memory.hasOverlay && (

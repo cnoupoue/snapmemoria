@@ -350,6 +350,12 @@ button {
   font-size: 2rem;
 }
 
+.memory-video-placeholder-action {
+  color: #333;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
 .overlay-badge,
 .video-badge {
   position: absolute;
@@ -662,6 +668,72 @@ button {
   margin: 0;
   font-size: 1.2rem;
   letter-spacing: -0.02em;
+}
+
+.diagnostic-status {
+  padding: 6px 9px;
+  color: #333;
+  font-size: 0.74rem;
+  font-weight: 800;
+  background: #eee;
+  border-radius: 999px;
+}
+
+.diagnostic-status.ready {
+  background: #dff6dd;
+}
+
+.diagnostic-status.unavailable {
+  background: #fff2cc;
+}
+
+.diagnostic-message {
+  margin: 0;
+  color: #555;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.diagnostics-grid div {
+  padding: 14px;
+  background: #fafafa;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+}
+
+.diagnostics-grid dt {
+  margin-bottom: 6px;
+  color: #777;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.diagnostics-grid dd {
+  margin: 0;
+  color: #242424;
+  font-weight: 700;
+}
+
+.diagnostics-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 18px;
+}
+
+.diagnostic-copy-status {
+  color: #555;
+  font-size: 0.86rem;
+  line-height: 1.45;
 }
 
 .source-form {
