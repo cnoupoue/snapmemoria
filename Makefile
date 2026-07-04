@@ -174,6 +174,8 @@ check-bundled-ffmpeg: check-macos-arm64 ## Verify the macOS arm64 FFmpeg binary 
 	@test -f "$(BUNDLED_FFMPEG_SOURCE)" || { echo "Missing bundled FFmpeg: $(BUNDLED_FFMPEG_SOURCE). Add a verified macOS $(MACOS_ARCH) FFmpeg binary and update packaging/macos/ffmpeg/README.md plus THIRD_PARTY_NOTICES.md."; exit 1; }
 	@test -x "$(BUNDLED_FFMPEG_SOURCE)" || { echo "Bundled FFmpeg is not executable: $(BUNDLED_FFMPEG_SOURCE). Run 'chmod +x $(BUNDLED_FFMPEG_SOURCE)' after verifying the binary."; exit 1; }
 	@file "$(BUNDLED_FFMPEG_SOURCE)" | grep -Eq 'arm64' || { echo "Bundled FFmpeg must support macOS arm64: $(BUNDLED_FFMPEG_SOURCE)."; exit 1; }
+	@"$(BUNDLED_FFMPEG_SOURCE)" -version >/dev/null || { echo "Bundled FFmpeg failed validation: $(BUNDLED_FFMPEG_SOURCE) -version"; exit 1; }
+	@otool -L "$(BUNDLED_FFMPEG_SOURCE)" | grep -Eq '/(opt/homebrew|usr/local)/(Cellar|opt)/' && { echo "Bundled FFmpeg must not depend on Homebrew dynamic libraries."; exit 1; } || true
 	@echo "Bundled FFmpeg is present and executable: $(BUNDLED_FFMPEG_SOURCE)"
 
 prepare-bundled-ffmpeg: prepare-macos-input check-bundled-ffmpeg ## Stage bundled FFmpeg for jpackage
@@ -261,6 +263,8 @@ inspect-bundled-ffmpeg: inspect-macos-app ## Verify the generated macOS app cont
 	@test -f "$(BUNDLED_FFMPEG_APP_PATH)" || { echo "Missing bundled FFmpeg in app: $(BUNDLED_FFMPEG_APP_PATH)."; exit 1; }
 	@test -x "$(BUNDLED_FFMPEG_APP_PATH)" || { echo "Bundled FFmpeg in app is not executable: $(BUNDLED_FFMPEG_APP_PATH)."; exit 1; }
 	@file "$(BUNDLED_FFMPEG_APP_PATH)" | grep -Eq 'arm64' || { echo "Bundled app FFmpeg must support macOS arm64."; exit 1; }
+	@"$(BUNDLED_FFMPEG_APP_PATH)" -version >/dev/null || { echo "Bundled app FFmpeg failed validation: $(BUNDLED_FFMPEG_APP_PATH) -version"; exit 1; }
+	@otool -L "$(BUNDLED_FFMPEG_APP_PATH)" | grep -Eq '/(opt/homebrew|usr/local)/(Cellar|opt)/' && { echo "Bundled app FFmpeg must not depend on Homebrew dynamic libraries."; exit 1; } || true
 	@echo "macOS app contains executable bundled FFmpeg."
 
 clean-packaging: ## Remove generated packaging artifacts only

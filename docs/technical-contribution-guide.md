@@ -144,7 +144,7 @@ Verify the installation:
 ffmpeg -version
 ```
 
-FFmpeg is used only for video thumbnail generation. Original video playback works through the media streaming endpoint even when FFmpeg is unavailable. During development, Memoria Vault resolves FFmpeg from `memoriavault.ffmpeg.path` first, then the current `PlatformService` bundled FFmpeg location if present, then the system `PATH`.
+FFmpeg is used only for video thumbnail generation. Original video playback works through the media streaming endpoint even when FFmpeg is unavailable. During development, Memoria Vault resolves FFmpeg from an absolute `memoriavault.ffmpeg.path` first, then the current `PlatformService` bundled FFmpeg location if present, then the system `PATH`. A configured command name such as `ffmpeg` is treated only as a system fallback and must not prevent bundled FFmpeg from being selected in packaged builds.
 
 ## Initial setup
 

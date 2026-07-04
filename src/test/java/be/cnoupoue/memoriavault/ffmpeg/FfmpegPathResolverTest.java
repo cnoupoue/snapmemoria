@@ -39,6 +39,33 @@ class FfmpegPathResolverTest {
   }
 
   @Test
+  void bundledFfmpegIsUsedBeforeSystemPathFallback() throws Exception {
+    Path bundledFfmpeg = executable(temporaryDirectory.resolve("platform-bundle/bin/ffmpeg"));
+    Path binDirectory = Files.createDirectories(temporaryDirectory.resolve("bin"));
+    executable(binDirectory.resolve("ffmpeg"));
+
+    FfmpegResolution resolution =
+        new FfmpegPathResolver("", () -> Optional.of(bundledFfmpeg), binDirectory.toString())
+            .resolve();
+
+    assertThat(resolution.available()).isTrue();
+    assertThat(resolution.executablePath()).isEqualTo(bundledFfmpeg);
+    assertThat(resolution.source()).isEqualTo(FfmpegSource.BUNDLED);
+  }
+
+  @Test
+  void plainFfmpegConfigurationDoesNotBlockBundledFfmpeg() throws Exception {
+    Path bundledFfmpeg = executable(temporaryDirectory.resolve("platform-bundle/bin/ffmpeg"));
+
+    FfmpegResolution resolution =
+        new FfmpegPathResolver("ffmpeg", () -> Optional.of(bundledFfmpeg), "").resolve();
+
+    assertThat(resolution.available()).isTrue();
+    assertThat(resolution.executablePath()).isEqualTo(bundledFfmpeg);
+    assertThat(resolution.source()).isEqualTo(FfmpegSource.BUNDLED);
+  }
+
+  @Test
   void systemPathFfmpegIsUsedWhenBundledFfmpegIsAbsent() throws Exception {
     Path binDirectory = Files.createDirectories(temporaryDirectory.resolve("bin"));
     Path systemFfmpeg = executable(binDirectory.resolve("ffmpeg"));
@@ -50,6 +77,53 @@ class FfmpegPathResolverTest {
     assertThat(resolution.executablePath()).isEqualTo(systemFfmpeg);
     assertThat(resolution.source()).isEqualTo(FfmpegSource.SYSTEM_PATH);
     assertThat(resolution.diagnosticMessage()).isEqualTo("Using system FFmpeg.");
+  }
+
+  @Test
+  void plainFfmpegConfigurationCanBeUsedAsSystemFallback() throws Exception {
+    Path binDirectory = Files.createDirectories(temporaryDirectory.resolve("bin"));
+    Path systemFfmpeg = executable(binDirectory.resolve("ffmpeg"));
+
+    FfmpegResolution resolution =
+        new FfmpegPathResolver("ffmpeg", Optional::empty, binDirectory.toString()).resolve();
+
+    assertThat(resolution.available()).isTrue();
+    assertThat(resolution.executablePath()).isEqualTo(systemFfmpeg);
+    assertThat(resolution.source()).isEqualTo(FfmpegSource.SYSTEM_PATH);
+  }
+
+  @Test
+  void nonExecutableBundledFfmpegIsRejectedSafely() throws Exception {
+    Path bundledFfmpeg = nonExecutable(temporaryDirectory.resolve("platform-bundle/bin/ffmpeg"));
+
+    FfmpegResolution resolution =
+        new FfmpegPathResolver("", () -> Optional.of(bundledFfmpeg), "").resolve();
+
+    assertThat(resolution.available()).isFalse();
+    assertThat(resolution.executablePath()).isNull();
+    assertThat(resolution.source()).isEqualTo(FfmpegSource.UNAVAILABLE);
+    assertThat(resolution.diagnosticMessage())
+        .isEqualTo(
+            "Bundled video preview support could not start. Original videos can still be opened.");
+  }
+
+  @Test
+  void bundledFfmpegThatFailsVersionValidationFallsBackToSystemPath() throws Exception {
+    Path bundledFfmpeg = executable(temporaryDirectory.resolve("platform-bundle/bin/ffmpeg"));
+    Path binDirectory = Files.createDirectories(temporaryDirectory.resolve("bin"));
+    Path systemFfmpeg = executable(binDirectory.resolve("ffmpeg"));
+
+    FfmpegResolution resolution =
+        new FfmpegPathResolver(
+                "",
+                () -> Optional.of(bundledFfmpeg),
+                binDirectory.toString(),
+                candidate -> candidate.equals(systemFfmpeg))
+            .resolve();
+
+    assertThat(resolution.available()).isTrue();
+    assertThat(resolution.executablePath()).isEqualTo(systemFfmpeg);
+    assertThat(resolution.source()).isEqualTo(FfmpegSource.SYSTEM_PATH);
   }
 
   @Test
@@ -78,6 +152,13 @@ class FfmpegPathResolverTest {
     Files.createDirectories(path.getParent());
     Files.writeString(path, "#!/bin/sh\nexit 0\n");
     path.toFile().setExecutable(true);
+    return path.toAbsolutePath().normalize();
+  }
+
+  private Path nonExecutable(Path path) throws Exception {
+    Files.createDirectories(path.getParent());
+    Files.writeString(path, "#!/bin/sh\nexit 0\n");
+    path.toFile().setExecutable(false);
     return path.toAbsolutePath().normalize();
   }
 }

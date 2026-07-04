@@ -63,7 +63,7 @@ Verify the installation:
 ffmpeg -version
 ```
 
-Video playback does not depend on FFmpeg. If FFmpeg is unavailable, Memoria Vault continues to browse and open original videos, but video preview thumbnails are shown with a fallback state. Development can use FFmpeg from the system `PATH` or an explicit `memoriavault.ffmpeg.path` value.
+Video playback does not depend on FFmpeg. If FFmpeg is unavailable, Memoria Vault continues to browse and open original videos, but video preview thumbnails are shown with a fallback state. Development can use FFmpeg from the system `PATH` or an explicit absolute `memoriavault.ffmpeg.path` value. A plain command name such as `ffmpeg` is treated only as a system `PATH` fallback, so packaged macOS builds still prefer the bundled FFmpeg binary.
 
 ### Clone and install
 
