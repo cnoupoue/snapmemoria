@@ -16,13 +16,12 @@ export function OnboardingPage({ onAddSource }: OnboardingPageProps) {
         <p className="eyebrow">First launch</p>
         <h2>Welcome to Memoria Vault</h2>
         <p className="onboarding-lede">
-          Your memories should not stay buried in folders. Memoria Vault helps
-          you browse compatible exported memories by year, month, and flashbacks
-          directly from your computer or external drive.
+          Rediscover your memories, privately. Choose your exported archive
+          folder and browse it from this computer.
         </p>
 
         <div className="privacy-note">
-          <strong>Your files stay private.</strong>
+          <strong>Your files stay on your computer.</strong>
           <span>Nothing is uploaded.</span>
         </div>
 
@@ -32,7 +31,7 @@ export function OnboardingPage({ onAddSource }: OnboardingPageProps) {
             onClick={onAddSource}
             type="button"
           >
-            Add exported archive
+            Choose exported archive folder
           </button>
           <button
             className="secondary-button"
@@ -49,10 +48,10 @@ export function OnboardingPage({ onAddSource }: OnboardingPageProps) {
           <ol className="onboarding-steps">
             <li>
               <span>Step 1</span>
-              <strong>Find your exported archive folder.</strong>
+              <strong>Choose your exported archive folder.</strong>
               <p>
                 Use the folder from your downloaded data export. Compatible
-                Snapchat export folder structures are supported descriptively.
+                export folder structures are supported descriptively.
               </p>
             </li>
             <li>
@@ -67,8 +66,8 @@ export function OnboardingPage({ onAddSource }: OnboardingPageProps) {
               <span>Step 3</span>
               <strong>Scan locally and start browsing.</strong>
               <p>
-                Memoria Vault indexes metadata on your computer so your archive
-                becomes easy to explore.
+                Memoria Vault indexes memories in place so your archive becomes
+                easy to explore.
               </p>
             </li>
           </ol>

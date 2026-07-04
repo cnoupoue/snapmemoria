@@ -1,18 +1,11 @@
 import { useEffect, useState } from 'react';
 import { getFlashbacksByDate, getTodayFlashbacks } from '../api/snapmemoriaApi';
 import type { FlashbackMemory, FlashbackResponse } from '../api/types';
+import { MemoryCard } from './MemoryCard';
 
 type FlashbacksPageProps = {
   onOpenMemory: (memoryId: string) => void;
 };
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
 
 function formatDateForInput(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -144,8 +137,8 @@ export function FlashbacksPage({ onOpenMemory }: FlashbacksPageProps) {
 
       {flashbacks && (
         <p className="flashbacks-summary">
-          {flashbacks.memories.length} Memories from previous years on{' '}
-          <strong>{flashbacks.date}</strong>
+          {flashbacks.memories.length.toLocaleString()} memories from previous
+          years on <strong>{flashbacks.date}</strong>
         </p>
       )}
 
@@ -154,7 +147,12 @@ export function FlashbacksPage({ onOpenMemory }: FlashbacksPageProps) {
       {isLoading && <div className="state-message">Loading flashbacks…</div>}
 
       {!isLoading && !error && flashbacks?.memories.length === 0 && (
-        <div className="state-message">No flashbacks found for this date.</div>
+        <div className="state-message empty-state">
+          <strong>No flashbacks for this day.</strong>
+          <span>
+            Try another date, or come back after your archive has more memories.
+          </span>
+        </div>
       )}
 
       {!isLoading &&
@@ -171,60 +169,11 @@ export function FlashbacksPage({ onOpenMemory }: FlashbacksPageProps) {
 
             <div className="memory-grid">
               {memories.map((memory) => (
-                <button
-                  aria-label={`Open flashback from ${memory.capturedAt}`}
-                  className="memory-card"
+                <MemoryCard
                   key={memory.id}
-                  onClick={() => onOpenMemory(memory.id)}
-                  type="button"
-                >
-                  <div className="memory-preview">
-                    <img
-                      alt={`Memory from ${memory.capturedAt}`}
-                      className="memory-thumbnail"
-                      loading="lazy"
-                      onError={(event) => {
-                        event.currentTarget.style.display = 'none';
-
-                        const fallback = event.currentTarget.nextElementSibling;
-
-                        if (fallback instanceof HTMLElement) {
-                          fallback.hidden = false;
-                        }
-                      }}
-                      src={`/api/memories/${memory.id}/thumbnail`}
-                    />
-
-                    <div className="memory-video-placeholder" hidden>
-                      <span className="media-icon">
-                        {memory.mediaType === 'VIDEO' ? '▶' : '▣'}
-                      </span>
-
-                      <span>
-                        {memory.mediaType === 'VIDEO'
-                          ? 'Video preview unavailable'
-                          : 'Image preview unavailable'}
-                      </span>
-                    </div>
-
-                    {memory.hasOverlay && (
-                      <span className="overlay-badge">Overlay</span>
-                    )}
-
-                    {memory.mediaType === 'VIDEO' && (
-                      <span className="video-badge">Video</span>
-                    )}
-                  </div>
-
-                  <div className="memory-card-content">
-                    <strong>{memory.capturedAt}</strong>
-
-                    <span>
-                      {memory.mediaType.toLowerCase()} ·{' '}
-                      {formatFileSize(memory.fileSizeBytes)}
-                    </span>
-                  </div>
-                </button>
+                  memory={memory}
+                  onOpen={onOpenMemory}
+                />
               ))}
             </div>
           </section>

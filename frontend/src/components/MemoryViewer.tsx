@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MemoryDetail } from '../api/types';
 
 type MemoryViewerProps = {
@@ -17,6 +17,7 @@ export function MemoryViewer({
   const [mediaErrorMemoryId, setMediaErrorMemoryId] = useState<string | null>(
     null,
   );
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const hasMediaError = memory !== null && mediaErrorMemoryId === memory.id;
 
@@ -36,6 +37,12 @@ export function MemoryViewer({
 
   const isOpen = isLoading || error !== null || memory !== null;
 
+  useEffect(() => {
+    if (isOpen) {
+      closeButtonRef.current?.focus();
+    }
+  }, [isOpen]);
+
   if (!isOpen) {
     return null;
   }
@@ -52,16 +59,17 @@ export function MemoryViewer({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <button
+          ref={closeButtonRef}
           aria-label="Close viewer"
           className="memory-viewer-close"
           onClick={onClose}
           type="button"
         >
-          ×
+          Close
         </button>
 
         {isLoading && (
-          <div className="memory-viewer-state">Loading Memory…</div>
+          <div className="memory-viewer-state">Opening memory…</div>
         )}
 
         {!isLoading && error && (

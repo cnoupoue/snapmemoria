@@ -153,7 +153,9 @@ describe('App onboarding', () => {
     expect(
       await screen.findByText('Welcome to Memoria Vault'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Add exported archive')).toBeInTheDocument();
+    expect(
+      screen.getByText('Choose exported archive folder'),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/SnapMemoria/)).not.toBeInTheDocument();
     expect(screen.queryByText(/official Snapchat/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/affiliated with/i)).not.toBeInTheDocument();
@@ -179,7 +181,7 @@ describe('App onboarding', () => {
     render(<App />);
 
     expect(
-      await screen.findByText('Your files stay private.'),
+      await screen.findByText('Your files stay on your computer.'),
     ).toBeInTheDocument();
     expect(screen.getByText('Nothing is uploaded.')).toBeInTheDocument();
   });
@@ -224,7 +226,9 @@ describe('App onboarding', () => {
     render(<App />);
 
     await user.click(
-      await screen.findByRole('button', { name: 'Add exported archive' }),
+      await screen.findByRole('button', {
+        name: 'Choose exported archive folder',
+      }),
     );
 
     expect(
@@ -251,7 +255,9 @@ describe('App onboarding', () => {
     render(<App />);
 
     await user.click(
-      await screen.findByRole('button', { name: 'Add exported archive' }),
+      await screen.findByRole('button', {
+        name: 'Choose exported archive folder',
+      }),
     );
     await user.type(screen.getByLabelText('Source name'), 'Snapchat USB');
     await user.type(

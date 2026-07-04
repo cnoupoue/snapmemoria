@@ -15,6 +15,7 @@ import type {
   TimelineYear,
 } from './api/types';
 import { FlashbacksPage } from './components/FlashbacksPage';
+import { MemoryCard } from './components/MemoryCard';
 import { OnboardingPage } from './components/OnboardingPage';
 import { SettingsPage } from './components/SettingsPage';
 
@@ -35,14 +36,6 @@ const MONTH_NAMES = [
   'November',
   'December',
 ];
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
 
 function App() {
   const [years, setYears] = useState<TimelineYear[]>([]);
@@ -352,7 +345,7 @@ function App() {
 
   return (
     <main className="app-shell">
-      <aside className="sidebar">
+      <aside className="sidebar" aria-label="Primary navigation">
         <div className="brand">
           <span className="brand-mark">M</span>
 
@@ -362,7 +355,7 @@ function App() {
           </div>
         </div>
 
-        <section className="sidebar-section">
+        <div className="sidebar-scroll">
           <section className="sidebar-section sidebar-primary-navigation">
             <button
               className={`sidebar-main-link ${
@@ -405,82 +398,90 @@ function App() {
               Settings
             </button>
           </section>
-          <p className="sidebar-label">Timeline</p>
 
-          {isLoadingSources && <p className="muted-text">Checking setup…</p>}
+          <section className="sidebar-section">
+            <p className="sidebar-label">Timeline</p>
 
-          {!isLoadingSources && sourceLoadError && (
-            <p className="muted-text">Setup status unavailable.</p>
-          )}
+            {isLoadingSources && <p className="muted-text">Checking setup…</p>}
 
-          {!isLoadingSources && hasConfiguredSources && isLoadingYears && (
-            <p className="muted-text">Loading years…</p>
-          )}
+            {!isLoadingSources && sourceLoadError && (
+              <p className="muted-text">Setup status unavailable.</p>
+            )}
 
-          {!isLoadingSources && !hasConfiguredSources && !sourceLoadError && (
-            <p className="muted-text">
-              Add an exported archive folder to build your private local
-              archive.
-            </p>
-          )}
+            {!isLoadingSources && hasConfiguredSources && isLoadingYears && (
+              <p className="muted-text">Loading years…</p>
+            )}
 
-          {!isLoadingSources &&
-            hasConfiguredSources &&
-            !isLoadingYears &&
-            years.length === 0 && (
+            {!isLoadingSources && !hasConfiguredSources && !sourceLoadError && (
               <p className="muted-text">
-                No indexed Memories yet. Scan a source first.
+                Add an exported archive folder to build your private local
+                archive.
               </p>
             )}
 
-          <div className="timeline-list">
-            {years.map((item) => (
-              <button
-                className={`timeline-year ${
-                  selectedYear === item.year ? 'is-active' : ''
-                }`}
-                key={item.year}
-                onClick={() => selectYear(item.year)}
-                type="button"
-              >
-                <span>{item.year}</span>
-                <span>{item.memoryCount}</span>
-              </button>
-            ))}
-          </div>
-        </section>
+            {!isLoadingSources &&
+              hasConfiguredSources &&
+              !isLoadingYears &&
+              years.length === 0 && (
+                <p className="muted-text">
+                  No indexed Memories yet. Scan a source first.
+                </p>
+              )}
 
-        {selectedYear !== undefined && months.length > 0 && (
-          <section className="sidebar-section">
-            <p className="sidebar-label">{selectedYear} months</p>
-
-            <button
-              className={`month-button ${
-                selectedMonth === undefined ? 'is-active' : ''
-              }`}
-              onClick={() => setSelectedMonth(undefined)}
-              type="button"
-            >
-              <span>All year</span>
-            </button>
-
-            <div className="months-list">
-              {months.map((item) => (
+            <div className="timeline-list">
+              {years.map((item) => (
                 <button
-                  className={`month-button ${
-                    selectedMonth === item.month ? 'is-active' : ''
+                  className={`timeline-year ${
+                    selectedYear === item.year ? 'is-active' : ''
                   }`}
-                  key={item.month}
-                  onClick={() => selectMonth(item.month)}
+                  key={item.year}
+                  onClick={() => selectYear(item.year)}
                   type="button"
                 >
-                  <span>{MONTH_NAMES[item.month - 1]}</span>
+                  <span>{item.year}</span>
                   <span>{item.memoryCount}</span>
                 </button>
               ))}
             </div>
           </section>
-        )}
+
+          {selectedYear !== undefined && months.length > 0 && (
+            <section className="sidebar-section">
+              <p className="sidebar-label">{selectedYear} months</p>
+
+              <button
+                className={`month-button ${
+                  selectedMonth === undefined ? 'is-active' : ''
+                }`}
+                onClick={() => setSelectedMonth(undefined)}
+                type="button"
+              >
+                <span>All year</span>
+              </button>
+
+              <div className="months-list">
+                {months.map((item) => (
+                  <button
+                    className={`month-button ${
+                      selectedMonth === item.month ? 'is-active' : ''
+                    }`}
+                    key={item.month}
+                    onClick={() => selectMonth(item.month)}
+                    type="button"
+                  >
+                    <span>{MONTH_NAMES[item.month - 1]}</span>
+                    <span>{item.memoryCount}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+
+        <div className="sidebar-footer">
+          <strong>Local-first</strong>
+          <span>Your memories stay on this device.</span>
+        </div>
       </aside>
 
       <div className="app-content">
@@ -510,7 +511,10 @@ function App() {
                 </div>
 
                 <p className="memory-count">
-                  {totalMemories} Memories · {memories.length} loaded
+                  {totalMemories.toLocaleString()} memories
+                  {hasMoreMemories
+                    ? ` · ${memories.length.toLocaleString()} shown`
+                    : ''}
                 </p>
               </header>
 
@@ -522,8 +526,11 @@ function App() {
 
               {!isLoadingMemories && memories.length === 0 && !error && (
                 <div className="state-message archive-empty-state">
-                  <strong>Your source is ready.</strong>
-                  <span>Scan it to build your private local archive.</span>
+                  <strong>No memories here yet.</strong>
+                  <span>
+                    Scan your configured source to build this private local
+                    archive.
+                  </span>
                   <button
                     className="primary-button"
                     onClick={openSourceCreationFlow}
@@ -538,67 +545,12 @@ function App() {
                 <>
                   <div className="memory-grid">
                     {memories.map((memory) => (
-                      <button
-                        aria-label={`Open Memory from ${memory.capturedAt}`}
-                        className="memory-card"
+                      <MemoryCard
                         key={memory.id}
-                        onClick={() => void openMemory(memory.id)}
-                        type="button"
-                      >
-                        <div className="memory-preview">
-                          <img
-                            alt={`Memory from ${memory.capturedAt}`}
-                            className="memory-thumbnail"
-                            loading="lazy"
-                            onError={(event) => {
-                              event.currentTarget.style.display = 'none';
-
-                              const fallback =
-                                event.currentTarget.nextElementSibling;
-
-                              if (fallback instanceof HTMLElement) {
-                                fallback.hidden = false;
-                              }
-                            }}
-                            src={memory.thumbnailUrl ?? ''}
-                          />
-
-                          <div className="memory-video-placeholder" hidden>
-                            <span className="media-icon">
-                              {memory.mediaType === 'VIDEO' ? '▶' : '▣'}
-                            </span>
-
-                            <span>
-                              {memory.mediaType === 'VIDEO'
-                                ? 'Video preview unavailable'
-                                : 'Image preview unavailable'}
-                            </span>
-
-                            {memory.mediaType === 'VIDEO' && (
-                              <span className="memory-video-placeholder-action">
-                                Open video
-                              </span>
-                            )}
-                          </div>
-
-                          {memory.hasOverlay && (
-                            <span className="overlay-badge">Overlay</span>
-                          )}
-
-                          {memory.mediaType === 'VIDEO' && (
-                            <span className="video-badge">Video</span>
-                          )}
-                        </div>
-
-                        <div className="memory-card-content">
-                          <strong>{memory.capturedAt}</strong>
-
-                          <span>
-                            {memory.mediaType.toLowerCase()} ·{' '}
-                            {formatFileSize(memory.fileSizeBytes)}
-                          </span>
-                        </div>
-                      </button>
+                        memory={memory}
+                        onOpen={(memoryId) => void openMemory(memoryId)}
+                        thumbnailUrl={memory.thumbnailUrl}
+                      />
                     ))}
                   </div>
 
