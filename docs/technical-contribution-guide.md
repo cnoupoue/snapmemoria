@@ -90,24 +90,6 @@ This includes:
 
 Do not commit these files.
 
-### Internal rename history
-
-The project was previously named `snapmemoria` internally. Public branding is now `Memoria Vault`,
-and current code, package, Maven artifact, and configuration identifiers use `memoriavault`.
-
-Compatibility is intentionally retained for existing local data:
-
-* New installations use `~/.memoria-vault/`.
-* If `~/.memoria-vault/` does not exist and `~/.snapmemoria/` does, the application uses the legacy
-  directory in place.
-* No startup path automatically deletes, overwrites, or moves legacy data.
-* Deprecated `snapmemoria.*` configuration keys are supported as aliases for one release cycle when
-  the corresponding `memoriavault.*` key is absent.
-* Existing Flyway migrations, table names, column names, and persisted schema history are preserved.
-
-After at least one compatibility release, maintainers can evaluate removing deprecated configuration
-aliases. Legacy data-directory migration should remain explicit and conservative.
-
 ## Compatible export format
 
 Memoria Vault currently supports filenames such as:
