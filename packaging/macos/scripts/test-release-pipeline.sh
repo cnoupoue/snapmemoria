@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/memoriavault-release-tests.XXXXXX")"
 trap 'rm -rf "$TMP_DIR"' EXIT
+ORIGINAL_PATH="$PATH"
 
 STUB_DIR="$TMP_DIR/bin"
 mkdir -p "$STUB_DIR"
@@ -115,6 +116,16 @@ assert_contains() {
   }
 }
 
+assert_equals() {
+  expected="$1"
+  actual="$2"
+  message="$3"
+  if [ "$expected" != "$actual" ]; then
+    echo "$message" >&2
+    exit 1
+  fi
+}
+
 mtime() {
   stat -f %m "$1" 2>/dev/null || stat -c %Y "$1"
 }
@@ -166,23 +177,27 @@ grep -Fq "libsqlitejdbc.dylib" "$TMP_DIR/sqlite-other-cwd-signed.log" || { echo 
 fixture="$TMP_DIR/sign-sqlite-zip-fails"
 make_fixture "$fixture"
 outer_jar="$fixture/Memoria Vault.app/Contents/app/memoria-vault-test.jar"
-before_cksum="$(cksum "$outer_jar")"
+sqlite_entry="BOOT-INF/lib/sqlite-jdbc-test.jar"
+before_checksum="$(shasum -a 256 "$outer_jar" | awk '{print $1}')"
 set +e
-output="$(STUB_ALL_SIGNED=1 STUB_CODESIGN_SIGNED_LOG="$TMP_DIR/sqlite-fail-signed.log" PATH="$FAIL_ZIP_DIR:$STUB_DIR:$PATH" APPLE_DEVELOPER_ID_APPLICATION="Developer ID Application: Test (ZK7G72LVAX)" APPLE_TEAM_ID="ZK7G72LVAX" KEYCHAIN_PATH="$TMP_DIR/signing.keychain-db" "$SCRIPT_DIR/sign-sqlite-native-libs.sh" "$fixture/Memoria Vault.app" 2>&1)"
-status=$?
+failure_output="$(STUB_ALL_SIGNED=1 STUB_CODESIGN_SIGNED_LOG="$TMP_DIR/sqlite-fail-signed.log" PATH="$FAIL_ZIP_DIR:$STUB_DIR:$ORIGINAL_PATH" APPLE_DEVELOPER_ID_APPLICATION="Developer ID Application: Test (ZK7G72LVAX)" APPLE_TEAM_ID="ZK7G72LVAX" KEYCHAIN_PATH="$TMP_DIR/signing.keychain-db" "$SCRIPT_DIR/sign-sqlite-native-libs.sh" "$fixture/Memoria Vault.app" 2>&1)"
+failure_status=$?
 set -e
-[ "$status" -ne 0 ] || { echo "Expected SQLite archive update failure to fail the script." >&2; exit 1; }
-after_cksum="$(cksum "$outer_jar")"
-[ "$before_cksum" = "$after_cksum" ] || { echo "Expected failed SQLite archive update to restore the original outer JAR." >&2; exit 1; }
-assert_contains "$output" "Unable to update packaged SQLite JDBC archive."
-assert_contains "$output" "Outer application archive was not modified successfully."
-case "$output" in
+[ "$failure_status" -ne 0 ] || { echo "Expected SQLite archive update failure to fail the script." >&2; exit 1; }
+after_checksum="$(shasum -a 256 "$outer_jar" | awk '{print $1}')"
+assert_equals "$before_checksum" "$after_checksum" "The original application JAR must be restored after archive update failure."
+assert_contains "$failure_output" "Unable to update packaged SQLite JDBC archive."
+assert_contains "$failure_output" "Outer application archive was not modified successfully."
+case "$failure_output" in
   *"$TMP_DIR"*)
     echo "Expected SQLite archive update failure output to avoid unsafe temporary absolute paths." >&2
-    echo "$output" >&2
+    echo "$failure_output" >&2
     exit 1
     ;;
 esac
+unzip -tq "$outer_jar" >/dev/null || { echo "Expected restored outer app JAR to pass unzip validation." >&2; exit 1; }
+jar tf "$outer_jar" | grep -qx "$sqlite_entry" || { echo "Expected restored outer app JAR to retain the SQLite JDBC entry." >&2; exit 1; }
+echo "SQLite archive rollback behavior verified."
 
 fixture="$TMP_DIR/verify-unsigned"
 make_fixture "$fixture"

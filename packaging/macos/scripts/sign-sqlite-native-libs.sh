@@ -237,7 +237,9 @@ jar tf "$APP_JAR" | grep -qx 'BOOT-INF/classes/static/index.html' || {
 }
 
 while IFS= read -r sqlite_entry; do
-  unzip -l "$APP_JAR" | grep -F "$sqlite_entry" >/dev/null || {
+  APP_JAR_ENTRIES="$WORK_DIR/app-jar-entries.txt"
+  jar tf "$APP_JAR" >"$APP_JAR_ENTRIES"
+  grep -Fx "$sqlite_entry" "$APP_JAR_ENTRIES" >/dev/null || {
     cp "$APP_JAR_BACKUP" "$APP_JAR" 2>/dev/null || true
     echo "Unable to update packaged SQLite JDBC archive." >&2
     echo "Outer application archive was not modified successfully." >&2
