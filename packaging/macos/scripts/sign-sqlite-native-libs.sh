@@ -200,9 +200,15 @@ while IFS= read -r sqlite_jar; do
 
   sqlite_rel="${sqlite_jar#"$APP_JAR_WORK/"}"
   printf '%s\n' "$sqlite_rel" >>"$UPDATED_SQLITE_ENTRIES"
+  zip -q -d "$APP_JAR" "$sqlite_rel" >/dev/null || {
+    cp "$APP_JAR_BACKUP" "$APP_JAR" 2>/dev/null || true
+    echo "Unable to update packaged SQLite JDBC archive." >&2
+    echo "Outer application archive was not modified successfully." >&2
+    exit 1
+  }
   (
     cd "$APP_JAR_WORK"
-    zip -0 -q -u "$APP_JAR" "$sqlite_rel"
+    zip -0 -q "$APP_JAR" "$sqlite_rel"
   ) || {
     cp "$APP_JAR_BACKUP" "$APP_JAR" 2>/dev/null || true
     echo "Unable to update packaged SQLite JDBC archive." >&2
@@ -230,14 +236,15 @@ unzip -tq "$APP_JAR" >/dev/null || {
   exit 1
 }
 
-jar tf "$APP_JAR" | grep -qx 'BOOT-INF/classes/static/index.html' || {
+APP_JAR_ENTRIES="$WORK_DIR/app-jar-entries.txt"
+jar tf "$APP_JAR" >"$APP_JAR_ENTRIES"
+grep -Fx 'BOOT-INF/classes/static/index.html' "$APP_JAR_ENTRIES" >/dev/null || {
   cp "$APP_JAR_BACKUP" "$APP_JAR" 2>/dev/null || true
   echo "Modified application JAR failed packaged asset verification." >&2
   exit 1
 }
 
 while IFS= read -r sqlite_entry; do
-  APP_JAR_ENTRIES="$WORK_DIR/app-jar-entries.txt"
   jar tf "$APP_JAR" >"$APP_JAR_ENTRIES"
   grep -Fx "$sqlite_entry" "$APP_JAR_ENTRIES" >/dev/null || {
     cp "$APP_JAR_BACKUP" "$APP_JAR" 2>/dev/null || true

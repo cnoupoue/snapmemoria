@@ -331,4 +331,4 @@ if grep -Eq 'echo \$\{\{ secrets\.(APPLE_APP_SPECIFIC_PASSWORD|APPLE_CERTIFICATE
   exit 1
 fi
 
-echo "macOS release pipeline script tests passed."
+echo "macOS release pipeline tests passed."
