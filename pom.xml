@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>be.cnoupoue</groupId>
 	<artifactId>memoria-vault</artifactId>
-	<version>0.1.2-beta.11</version>
+	<version>0.1.2</version>
 	<name>Memoria Vault</name>
 	<description>A private, local-first app for browsing compatible exported memory archives.</description>
 	<url/>
