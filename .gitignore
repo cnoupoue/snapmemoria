@@ -71,3 +71,7 @@ application-local.yml
 # Local runtime files
 logs/
 *.log
+
+
+# ffmpeg windows binaries
+packaging/windows/ffmpeg/**/*.exe

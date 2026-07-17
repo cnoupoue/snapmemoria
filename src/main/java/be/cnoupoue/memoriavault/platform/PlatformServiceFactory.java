@@ -2,6 +2,7 @@ package be.cnoupoue.memoriavault.platform;
 
 import be.cnoupoue.memoriavault.platform.common.UnsupportedPlatformService;
 import be.cnoupoue.memoriavault.platform.macos.MacosPlatformService;
+import be.cnoupoue.memoriavault.platform.windows.WindowsPlatformService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +17,10 @@ public class PlatformServiceFactory {
 
     if (platformType == PlatformType.MACOS) {
       return new MacosPlatformService();
+    }
+
+    if (platformType == PlatformType.WINDOWS) {
+      return new WindowsPlatformService();
     }
 
     return new UnsupportedPlatformService(platformType);

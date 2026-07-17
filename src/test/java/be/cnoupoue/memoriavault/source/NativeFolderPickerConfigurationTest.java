@@ -36,6 +36,16 @@ class NativeFolderPickerConfigurationTest {
                     .isInstanceOf(UnsupportedNativeFolderPicker.class));
   }
 
+  @Test
+  void windowsPlatformUsesWindowsPicker() {
+    contextRunner
+        .withBean(PlatformService.class, () -> new FakePlatformService(PlatformType.WINDOWS, true))
+        .run(
+            context ->
+                assertThat(context.getBean(NativeFolderPicker.class))
+                    .isInstanceOf(WindowsNativeFolderPicker.class));
+  }
+
   private record FakePlatformService(PlatformType platformType, boolean nativeFolderPicker)
       implements PlatformService {
 

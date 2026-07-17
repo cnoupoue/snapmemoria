@@ -17,6 +17,11 @@ public class NativeFolderPickerConfiguration {
       return new MacosNativeFolderPicker();
     }
 
+    if (platformService.getPlatformType() == PlatformType.WINDOWS
+        && platformService.getCapabilities().nativeFolderPicker()) {
+      return new WindowsNativeFolderPicker();
+    }
+
     return new UnsupportedNativeFolderPicker();
   }
 }

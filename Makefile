@@ -333,9 +333,13 @@ package-macos-release: package-macos-app postprocess-macos-sqlite-native-libs si
 
 package-macos: package-macos-dmg ## Build an unsigned local macOS app image and development DMG
 
-package-windows: ## Future work: Windows packaging is not implemented yet
-	@echo "Windows packaging is not implemented yet. See packaging/windows/README.md."
-	@exit 1
+package-windows: ## Prepare and run Windows packaging helper (PowerShell)
+	@echo "Preparing Windows packaging helper. See packaging/windows/README.md and packaging/windows/scripts."
+	@if command -v pwsh >/dev/null 2>&1; then \
+		pwsh -NoProfile -ExecutionPolicy Bypass -File packaging/windows/scripts/package-windows.ps1 || { echo "PowerShell script failed."; exit 1; }; \
+	else \
+		echo "PowerShell Core (pwsh) is required to run packaging/windows/scripts/package-windows.ps1. On Windows use 'pwsh' or run the script manually with PowerShell."; exit 1; \
+	fi
 
 package-linux: ## Future work: Linux packaging is not implemented yet
 	@echo "Linux packaging is not implemented yet. See packaging/linux/README.md."
