@@ -51,7 +51,7 @@ export function MemoryViewer({
     isPreparing: false,
     openOriginalStatus: null,
   });
-  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const viewerRef = useRef<HTMLElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const hasMediaError = memory !== null && mediaErrorMemoryId === memory.id;
@@ -67,14 +67,49 @@ export function MemoryViewer({
       ? playbackState.openOriginalStatus
       : null;
 
+  const isOpen = isLoading || error !== null || memory !== null;
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (!isOpen) {
+        return;
+      }
+
       if (event.key === 'Escape') {
         onClose();
         return;
       }
 
-      if (shouldIgnoreArrowNavigation(event)) {
+      if (isSpaceKey(event)) {
+        if (
+          memory?.mediaType !== 'VIDEO' ||
+          hasMediaError ||
+          shouldIgnoreVideoPlaybackShortcut(event)
+        ) {
+          return;
+        }
+
+        const video = videoRef.current;
+
+        if (!video) {
+          return;
+        }
+
+        event.preventDefault();
+
+        if (video.paused) {
+          void video.play().catch(() => {
+            setMediaErrorMemoryId(memory.id);
+            setMediaErrorCategory('BROWSER_MEDIA_ERROR');
+          });
+        } else {
+          video.pause();
+        }
+
+        return;
+      }
+
+      if (shouldIgnoreMemoryNavigationShortcut(event)) {
         return;
       }
 
@@ -95,13 +130,20 @@ export function MemoryViewer({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [hasNext, hasPrevious, onClose, onNext, onPrevious]);
-
-  const isOpen = isLoading || error !== null || memory !== null;
+  }, [
+    hasMediaError,
+    hasNext,
+    hasPrevious,
+    isOpen,
+    memory,
+    onClose,
+    onNext,
+    onPrevious,
+  ]);
 
   useEffect(() => {
     if (isOpen) {
-      closeButtonRef.current?.focus();
+      viewerRef.current?.focus();
     }
   }, [isOpen]);
 
@@ -227,11 +269,12 @@ export function MemoryViewer({
       role="dialog"
     >
       <section
+        ref={viewerRef}
         className="memory-viewer"
         onMouseDown={(event) => event.stopPropagation()}
+        tabIndex={-1}
       >
         <button
-          ref={closeButtonRef}
           aria-label="Close viewer"
           className="memory-viewer-close"
           onClick={onClose}
@@ -387,23 +430,46 @@ function shouldAttemptCompatibilityPlayback(category: PlaybackFailureCategory) {
   );
 }
 
-function shouldIgnoreArrowNavigation(event: KeyboardEvent) {
+function isSpaceKey(event: KeyboardEvent) {
+  return (
+    event.key === ' ' || event.key === 'Spacebar' || event.code === 'Space'
+  );
+}
+
+function hasShortcutModifier(event: KeyboardEvent) {
+  return event.metaKey || event.ctrlKey || event.altKey || event.shiftKey;
+}
+
+function shouldIgnoreMemoryNavigationShortcut(event: KeyboardEvent) {
   if (
-    event.metaKey ||
-    event.ctrlKey ||
-    event.altKey ||
-    event.shiftKey ||
+    hasShortcutModifier(event) ||
     (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')
   ) {
     return true;
   }
 
-  const target = event.target instanceof HTMLElement ? event.target : null;
+  return isEditableShortcutTarget(event.target, false);
+}
+
+function shouldIgnoreVideoPlaybackShortcut(event: KeyboardEvent) {
+  if (hasShortcutModifier(event)) {
+    return true;
+  }
+
+  return isEditableShortcutTarget(event.target, true);
+}
+
+function isEditableShortcutTarget(
+  eventTarget: EventTarget | null,
+  includeButtons: boolean,
+) {
+  const target = eventTarget instanceof HTMLElement ? eventTarget : null;
 
   return (
     target?.tagName === 'INPUT' ||
     target?.tagName === 'TEXTAREA' ||
     target?.tagName === 'SELECT' ||
+    (includeButtons && target?.tagName === 'BUTTON') ||
     target?.isContentEditable === true ||
     target?.getAttribute('contenteditable') === 'true'
   );

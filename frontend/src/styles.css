@@ -72,7 +72,10 @@ a:focus-visible {
   top: 0;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  min-height: 100vh;
+  align-self: start;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
   padding: 24px 16px;
   background: rgb(247 247 248 / 80%);
   border-right: 1px solid var(--line);
@@ -1144,7 +1147,9 @@ a:focus-visible {
 
   .sidebar {
     position: static;
+    height: auto;
     min-height: auto;
+    overflow: visible;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }

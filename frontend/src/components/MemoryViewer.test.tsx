@@ -8,6 +8,7 @@ import {
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { prepareCompatibilityPlayback } from '../api/memoriaVaultApi';
+import type { MemoryDetail } from '../api/types';
 import { MemoryViewer } from './MemoryViewer';
 
 vi.mock('../api/memoriaVaultApi', () => ({
@@ -18,6 +19,24 @@ vi.mock('../api/memoriaVaultApi', () => ({
 const prepareCompatibilityPlaybackMock = vi.mocked(
   prepareCompatibilityPlayback,
 );
+
+function buildMemoryDetail(
+  overrides: Partial<MemoryDetail> = {},
+): MemoryDetail {
+  return {
+    id: 'memory-1',
+    capturedAt: '2020-06-10',
+    mediaType: 'IMAGE',
+    hasOverlay: false,
+    fileSizeBytes: 1_500_000,
+    lastModifiedAt: '2020-06-10T10:00:00Z',
+    mediaUrl: '/api/memories/memory-1/media',
+    overlayUrl: null,
+    isFavorite: false,
+    favoritedAt: null,
+    ...overrides,
+  };
+}
 
 afterEach(() => {
   cleanup();
@@ -218,6 +237,180 @@ describe('MemoryViewer', () => {
     expect(onPrevious).not.toHaveBeenCalled();
   });
 
+  it('pauses a playing video with Space and prevents page scroll', () => {
+    const pauseSpy = vi
+      .spyOn(HTMLMediaElement.prototype, 'pause')
+      .mockImplementation(() => {});
+
+    render(
+      <MemoryViewer
+        error={null}
+        isLoading={false}
+        memory={buildMemoryDetail({
+          id: 'memory-video',
+          mediaType: 'VIDEO',
+          mediaUrl: '/api/memories/memory-video/media',
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const video = document.querySelector('video') as HTMLVideoElement;
+    Object.defineProperty(video, 'paused', {
+      configurable: true,
+      value: false,
+    });
+
+    const event = new KeyboardEvent('keydown', {
+      key: ' ',
+      code: 'Space',
+      bubbles: true,
+      cancelable: true,
+    });
+
+    window.dispatchEvent(event);
+
+    expect(pauseSpy).toHaveBeenCalledTimes(1);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('plays a paused video with Space and prevents page scroll', () => {
+    const playSpy = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockResolvedValue(undefined);
+
+    render(
+      <MemoryViewer
+        error={null}
+        isLoading={false}
+        memory={buildMemoryDetail({
+          id: 'memory-video',
+          mediaType: 'VIDEO',
+          mediaUrl: '/api/memories/memory-video/media',
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const video = document.querySelector('video') as HTMLVideoElement;
+    Object.defineProperty(video, 'paused', {
+      configurable: true,
+      value: true,
+    });
+
+    const event = new KeyboardEvent('keydown', {
+      key: ' ',
+      code: 'Space',
+      bubbles: true,
+      cancelable: true,
+    });
+
+    window.dispatchEvent(event);
+
+    expect(playSpy).toHaveBeenCalledTimes(1);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('does nothing with Space for image memories or while the viewer is closed', () => {
+    const playSpy = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockResolvedValue(undefined);
+    const pauseSpy = vi
+      .spyOn(HTMLMediaElement.prototype, 'pause')
+      .mockImplementation(() => {});
+
+    const { rerender } = render(
+      <MemoryViewer
+        error={null}
+        isLoading={false}
+        memory={buildMemoryDetail()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const imageEvent = new KeyboardEvent('keydown', {
+      key: ' ',
+      code: 'Space',
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(imageEvent);
+
+    rerender(
+      <MemoryViewer
+        error={null}
+        isLoading={false}
+        memory={null}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const closedEvent = new KeyboardEvent('keydown', {
+      key: ' ',
+      code: 'Space',
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(closedEvent);
+
+    expect(playSpy).not.toHaveBeenCalled();
+    expect(pauseSpy).not.toHaveBeenCalled();
+    expect(imageEvent.defaultPrevented).toBe(false);
+    expect(closedEvent.defaultPrevented).toBe(false);
+  });
+
+  it('ignores Space in form controls, buttons, contenteditable, and modifier shortcuts', () => {
+    const playSpy = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockResolvedValue(undefined);
+    const pauseSpy = vi
+      .spyOn(HTMLMediaElement.prototype, 'pause')
+      .mockImplementation(() => {});
+
+    render(
+      <>
+        <input aria-label="Search" />
+        <textarea aria-label="Notes" />
+        <select aria-label="Filter">
+          <option>All</option>
+        </select>
+        <button type="button">Focused action</button>
+        <div aria-label="Editable" contentEditable role="textbox" />
+        <MemoryViewer
+          error={null}
+          isLoading={false}
+          memory={buildMemoryDetail({
+            id: 'memory-video',
+            mediaType: 'VIDEO',
+            mediaUrl: '/api/memories/memory-video/media',
+          })}
+          onClose={vi.fn()}
+        />
+      </>,
+    );
+
+    const video = document.querySelector('video') as HTMLVideoElement;
+    Object.defineProperty(video, 'paused', {
+      configurable: true,
+      value: true,
+    });
+
+    fireEvent.keyDown(screen.getByLabelText('Search'), { key: ' ' });
+    fireEvent.keyDown(screen.getByLabelText('Notes'), { key: ' ' });
+    fireEvent.keyDown(screen.getByLabelText('Filter'), { key: ' ' });
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Focused action' }), {
+      key: ' ',
+    });
+    fireEvent.keyDown(screen.getByLabelText('Editable'), { key: ' ' });
+    fireEvent.keyDown(window, { key: ' ', metaKey: true });
+    fireEvent.keyDown(window, { key: ' ', ctrlKey: true });
+    fireEvent.keyDown(window, { key: ' ', altKey: true });
+    fireEvent.keyDown(window, { key: ' ', shiftKey: true });
+
+    expect(playSpy).not.toHaveBeenCalled();
+    expect(pauseSpy).not.toHaveBeenCalled();
+  });
+
   it('stops the previous video when navigating away from it', () => {
     const pauseSpy = vi
       .spyOn(HTMLMediaElement.prototype, 'pause')
@@ -271,6 +464,49 @@ describe('MemoryViewer', () => {
           isFavorite: false,
           favoritedAt: null,
         }}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(pauseSpy).toHaveBeenCalled();
+    expect(loadSpy).toHaveBeenCalled();
+  });
+
+  it('stops the current video when the viewer closes', () => {
+    const pauseSpy = vi
+      .spyOn(HTMLMediaElement.prototype, 'pause')
+      .mockImplementation(() => {});
+    const loadSpy = vi
+      .spyOn(HTMLMediaElement.prototype, 'load')
+      .mockImplementation(() => {});
+    const { rerender } = render(
+      <MemoryViewer
+        error={null}
+        isLoading={false}
+        memory={buildMemoryDetail({
+          id: 'memory-video',
+          mediaType: 'VIDEO',
+          mediaUrl: '/api/memories/memory-video/media',
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const video = document.querySelector('video') as HTMLVideoElement;
+    Object.defineProperty(video, 'paused', {
+      configurable: true,
+      value: false,
+    });
+    Object.defineProperty(video, 'currentSrc', {
+      configurable: true,
+      value: 'http://127.0.0.1:8080/api/memories/memory-video/media',
+    });
+
+    rerender(
+      <MemoryViewer
+        error={null}
+        isLoading={false}
+        memory={null}
         onClose={vi.fn()}
       />,
     );
