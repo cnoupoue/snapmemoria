@@ -71,6 +71,9 @@ jobs:
             exit 1
           fi
 
+          # Sanitize version strictly for Windows Installer (e.g., 0.1.2-beta.8 -> 0.1.2)
+          windows_version="${base_version}"
+
           prerelease=false
           if printf '%s\n' "${release_version}" | grep -q -- '-'; then
             prerelease=true
@@ -78,8 +81,9 @@ jobs:
 
           {
             echo "release_version=${release_version}"
+            echo "windows_version=${windows_version}"
             echo "release_asset_name=Memoria-Vault-${release_version}-windows-x64.exe"
-            echo "release_exe=dist/installers/Memoria Vault-${release_version}.exe"
+            echo "release_exe=dist/installers/Memoria-Vault-${release_version}-windows-x64.exe"
             echo "prerelease=${prerelease}"
           } >> "${GITHUB_OUTPUT}"
 
@@ -87,11 +91,17 @@ jobs:
         shell: powershell
         run: |
           # Executes your PowerShell script to download FFmpeg, build Maven, and prepare jpackage-input
+          # We pass the raw release version so it matches the compiled fat JAR name inside the script
           powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/scripts/package-windows.ps1 -Version "${{ steps.version.outputs.release_version }}"
 
       - name: Build Windows Executable via jpackage
         shell: powershell
         run: |
+          # Ensure WiX Toolset toolpath is explicitly found if pre-installed
+          if (Test-Path "C:\Program Files (x86)\WiX Toolset v3.11\bin") {
+              $env:Path += ";C:\Program Files (x86)\WiX Toolset v3.11\bin"
+          }
+
           # Locate the built JAR file inside the staged jpackage-input folder
           $jarFile = Get-ChildItem -Path "dist/jpackage-input" -Filter "*.jar" | Select-Object -First 1
           if (-not $jarFile) {
@@ -99,14 +109,15 @@ jobs:
               exit 1
           }
 
-          # Run jpackage to produce an standalone .exe installer (no WiX dependency needed for EXE type)
+          # Run jpackage with fixed Windows app version and Spring Boot JarLauncher
           jpackage --type exe `
                    --dest "dist/installers" `
                    --name "Memoria Vault" `
-                   --app-version "${{ steps.version.outputs.release_version }}" `
+                   --app-version "${{ steps.version.outputs.windows_version }}" `
                    --vendor "cnoupoue" `
                    --input "dist/jpackage-input" `
                    --main-jar $jarFile.Name `
+                   --main-class "org.springframework.boot.loader.launch.JarLauncher" `
                    --icon "packaging/windows/icon/MemoriaVault.ico" `
                    --win-shortcut `
                    --win-menu `
@@ -117,8 +128,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Rename the installer to match the consistent asset name pattern
-          mv "dist/installers/Memoria Vault-${{ steps.version.outputs.release_version }}.exe" "${{ steps.version.outputs.release_exe }}"
+          # jpackage names the output file based on --name and --app-version (which is windows_version)
+          generated_output="dist/installers/Memoria Vault-${{ steps.version.outputs.windows_version }}.exe"
+
+          # Rename the installer to match the consistent clean release asset name pattern
+          mv "${generated_output}" "${{ steps.version.outputs.release_exe }}"
 
           # Generate SHA-256 checksum
           sha256sum "${{ steps.version.outputs.release_exe }}" | awk '{print $1}' > "${{ steps.version.outputs.release_exe }}.sha256"
