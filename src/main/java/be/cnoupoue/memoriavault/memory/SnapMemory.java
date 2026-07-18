@@ -130,6 +130,7 @@ public class SnapMemory {
   }
 
   public void updateIndexedMetadata(SnapMemory scannedMemory) {
+    this.externalMemoryId = scannedMemory.externalMemoryId;
     this.capturedAt = scannedMemory.capturedAt;
     this.mediaType = scannedMemory.mediaType;
     this.mainPath = scannedMemory.mainPath;

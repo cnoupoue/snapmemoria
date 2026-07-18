@@ -61,15 +61,14 @@ public class MemoryIndexPersistence {
 
   @Transactional
   public void synchronizeSourceMemories(String sourceId, List<SnapMemory> scannedMemories) {
-    Map<String, SnapMemory> existingMemoriesByExternalId = new HashMap<>();
+    Map<String, SnapMemory> existingMemoriesByMainPath = new HashMap<>();
 
     for (SnapMemory existingMemory : snapMemoryRepository.findBySourceId(sourceId)) {
-      existingMemoriesByExternalId.put(existingMemory.getExternalMemoryId(), existingMemory);
+      existingMemoriesByMainPath.put(existingMemory.getMainPath(), existingMemory);
     }
 
     for (SnapMemory scannedMemory : scannedMemories) {
-      SnapMemory existingMemory =
-          existingMemoriesByExternalId.remove(scannedMemory.getExternalMemoryId());
+      SnapMemory existingMemory = existingMemoriesByMainPath.remove(scannedMemory.getMainPath());
 
       if (existingMemory == null) {
         entityManager.persist(scannedMemory);
@@ -79,7 +78,7 @@ public class MemoryIndexPersistence {
     }
 
     Set<String> missingMemoryIds =
-        existingMemoriesByExternalId.values().stream()
+        existingMemoriesByMainPath.values().stream()
             .map(SnapMemory::getId)
             .collect(Collectors.toSet());
 
