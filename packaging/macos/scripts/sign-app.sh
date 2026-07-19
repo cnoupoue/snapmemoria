@@ -4,6 +4,9 @@ set -euo pipefail
 APP_PATH="${1:-}"
 IDENTITY="${APPLE_DEVELOPER_ID_APPLICATION:-}"
 KEYCHAIN_PATH="${KEYCHAIN_PATH:-${APPLE_CODESIGN_KEYCHAIN:-}}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DEFAULT_ENTITLEMENTS_PATH="$SCRIPT_DIR/../entitlements/memoria-vault.entitlements.plist"
+ENTITLEMENTS_PATH="${MACOS_ENTITLEMENTS_PATH:-$DEFAULT_ENTITLEMENTS_PATH}"
 
 if [ -z "$APP_PATH" ]; then
   echo "Usage: APPLE_DEVELOPER_ID_APPLICATION=<identity> $0 path/to/Memoria Vault.app" >&2
@@ -25,6 +28,11 @@ if [ ! -d "$APP_PATH" ]; then
   exit 1
 fi
 
+if [ ! -f "$ENTITLEMENTS_PATH" ]; then
+  echo "Missing macOS entitlements file." >&2
+  exit 1
+fi
+
 require_tool() {
   command -v "$1" >/dev/null 2>&1 || {
     echo "Missing required tool: $1" >&2
@@ -40,17 +48,30 @@ is_macho() {
   file "$1" 2>/dev/null | grep -Eq 'Mach-O|universal binary'
 }
 
+requires_jvm_entitlements() {
+  rel="$1"
+  case "$rel" in
+    Contents/MacOS/*) return 0 ;;
+    Contents/runtime/Contents/Home/bin/java) return 0 ;;
+    Contents/runtime/Contents/Home/lib/server/libjvm.dylib) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 sign_one() {
   target="$1"
   rel="${target#"$APP_PATH/"}"
+  codesign_command=(codesign --force --options runtime --timestamp --sign "$IDENTITY")
+  if requires_jvm_entitlements "$rel"; then
+    codesign_command+=(--entitlements "$ENTITLEMENTS_PATH")
+  fi
+  if [ -n "$KEYCHAIN_PATH" ]; then
+    codesign_command+=(--keychain "$KEYCHAIN_PATH")
+  fi
 
   echo "Signing nested code: $rel"
   set +e
-  if [ -n "$KEYCHAIN_PATH" ]; then
-    sign_output="$(codesign --force --options runtime --timestamp --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" "$target" 2>&1)"
-  else
-    sign_output="$(codesign --force --options runtime --timestamp --sign "$IDENTITY" "$target" 2>&1)"
-  fi
+  sign_output="$("${codesign_command[@]}" "$target" 2>&1)"
   sign_status=$?
   set -e
   if [ "$sign_status" -ne 0 ]; then
@@ -116,12 +137,12 @@ echo "Signing bundled FFmpeg explicitly: Contents/app/ffmpeg/ffmpeg"
 sign_one "$FFMPEG_PATH"
 
 echo "Signing final app bundle: $(basename "$APP_PATH")"
-set +e
+app_sign_command=(codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS_PATH")
 if [ -n "$KEYCHAIN_PATH" ]; then
-  app_sign_output="$(codesign --force --options runtime --timestamp --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" "$APP_PATH" 2>&1)"
-else
-  app_sign_output="$(codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP_PATH" 2>&1)"
+  app_sign_command+=(--keychain "$KEYCHAIN_PATH")
 fi
+set +e
+app_sign_output="$("${app_sign_command[@]}" "$APP_PATH" 2>&1)"
 app_sign_status=$?
 set -e
 if [ "$app_sign_status" -ne 0 ]; then

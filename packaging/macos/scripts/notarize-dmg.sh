@@ -34,18 +34,21 @@ done
 mkdir -p "$ARTIFACT_DIR"
 
 submit_args=()
-if [ -n "${APPLE_ID:-}" ] || [ -n "${APPLE_TEAM_ID:-}" ] || [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]; then
-  if [ -z "${APPLE_ID:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ] || [ -z "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]; then
-    echo "APPLE_ID, APPLE_TEAM_ID, and APPLE_APP_SPECIFIC_PASSWORD must be set together." >&2
+
+require_notarization_credentials() {
+  if [ -n "${APPLE_ID:-}" ] || [ -n "${APPLE_TEAM_ID:-}" ] || [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]; then
+    if [ -z "${APPLE_ID:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ] || [ -z "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]; then
+      echo "APPLE_ID, APPLE_TEAM_ID, and APPLE_APP_SPECIFIC_PASSWORD must be set together." >&2
+      exit 2
+    fi
+    submit_args=(--apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD")
+  elif [ -n "${APPLE_NOTARYTOOL_PROFILE:-}" ]; then
+    submit_args=(--keychain-profile "$APPLE_NOTARYTOOL_PROFILE")
+  else
+    echo "Notarization credentials are required through environment variables or APPLE_NOTARYTOOL_PROFILE." >&2
     exit 2
   fi
-  submit_args=(--apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD")
-elif [ -n "${APPLE_NOTARYTOOL_PROFILE:-}" ]; then
-  submit_args=(--keychain-profile "$APPLE_NOTARYTOOL_PROFILE")
-else
-  echo "Notarization credentials are required through environment variables or APPLE_NOTARYTOOL_PROFILE." >&2
-  exit 2
-fi
+}
 
 json_get() {
   key="$1"
@@ -61,6 +64,7 @@ fetch_log() {
 }
 
 submit_and_wait() {
+  require_notarization_credentials
   rm -f "$ACCEPTED_MARKER"
   echo "Submitting signed DMG to Apple notarization."
   stderr_file="$(mktemp "${TMPDIR:-/tmp}/memoriavault-notarytool-stderr.XXXXXX")"

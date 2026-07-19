@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MemoryViewer } from './components/MemoryViewer';
 import {
+  addMemoryFavorite,
+  getFavoriteMemories,
   getMemories,
   getMemoryDetail,
   getMemorySources,
   getTimelineMonths,
   getTimelineYears,
+  removeMemoryFavorite,
 } from './api/memoriaVaultApi';
 import type {
   Memory,
@@ -61,13 +64,14 @@ function App() {
   const [selectedMemory, setSelectedMemory] = useState<MemoryDetail | null>(
     null,
   );
+  const [viewerMemoryIds, setViewerMemoryIds] = useState<string[]>([]);
   const [isLoadingSelectedMemory, setIsLoadingSelectedMemory] = useState(false);
   const [selectedMemoryError, setSelectedMemoryError] = useState<string | null>(
     null,
   );
 
   const [activeView, setActiveView] = useState<
-    'archive' | 'flashbacks' | 'settings'
+    'archive' | 'favorites' | 'flashbacks' | 'settings'
   >('archive');
 
   const [archiveRefreshVersion, setArchiveRefreshVersion] = useState(0);
@@ -206,12 +210,10 @@ function App() {
       setHasMoreMemories(false);
 
       try {
-        const data = await getMemories(
-          selectedYear,
-          selectedMonth,
-          0,
-          PAGE_SIZE,
-        );
+        const data =
+          activeView === 'favorites'
+            ? await getFavoriteMemories(0, PAGE_SIZE)
+            : await getMemories(selectedYear, selectedMonth, 0, PAGE_SIZE);
 
         if (requestVersion !== memoryRequestVersion.current) {
           return;
@@ -236,6 +238,7 @@ function App() {
   }, [
     selectedYear,
     selectedMonth,
+    activeView,
     archiveRefreshVersion,
     hasConfiguredSources,
     isLoadingSources,
@@ -252,12 +255,10 @@ function App() {
     setError(null);
 
     try {
-      const data = await getMemories(
-        selectedYear,
-        selectedMonth,
-        nextPage,
-        PAGE_SIZE,
-      );
+      const data =
+        activeView === 'favorites'
+          ? await getFavoriteMemories(nextPage, PAGE_SIZE)
+          : await getMemories(selectedYear, selectedMonth, nextPage, PAGE_SIZE);
 
       setMemories((currentMemories) => [...currentMemories, ...data.content]);
 
@@ -277,15 +278,108 @@ function App() {
     setSelectedMonth(undefined);
   }
 
+  async function toggleFavorite(memoryId: string, nextFavorite: boolean) {
+    const previousMemories = memories;
+    const previousSelectedMemory = selectedMemory;
+    const previousViewerMemoryIds = viewerMemoryIds;
+    const favoritedAt = nextFavorite ? new Date().toISOString() : null;
+    const currentViewerIndex = viewerMemoryIds.indexOf(memoryId);
+    const updatedViewerMemoryIds = viewerMemoryIds.filter(
+      (id) => id !== memoryId,
+    );
+    const fallbackViewerMemoryId =
+      currentViewerIndex === -1
+        ? undefined
+        : (viewerMemoryIds[currentViewerIndex + 1] ??
+          viewerMemoryIds[currentViewerIndex - 1]);
+
+    setError(null);
+    setMemories((currentMemories) =>
+      currentMemories.map((memory) =>
+        memory.id === memoryId
+          ? {
+              ...memory,
+              isFavorite: nextFavorite,
+              favoritedAt,
+            }
+          : memory,
+      ),
+    );
+    setSelectedMemory((currentMemory) =>
+      currentMemory?.id === memoryId
+        ? {
+            ...currentMemory,
+            isFavorite: nextFavorite,
+            favoritedAt,
+          }
+        : currentMemory,
+    );
+
+    try {
+      const updatedMemory = nextFavorite
+        ? await addMemoryFavorite(memoryId)
+        : await removeMemoryFavorite(memoryId);
+
+      setMemories((currentMemories) => {
+        const updatedMemories = currentMemories.map((memory) =>
+          memory.id === memoryId
+            ? {
+                ...memory,
+                isFavorite: updatedMemory.isFavorite,
+                favoritedAt: updatedMemory.favoritedAt,
+              }
+            : memory,
+        );
+
+        if (activeView === 'favorites' && !updatedMemory.isFavorite) {
+          return updatedMemories.filter((memory) => memory.id !== memoryId);
+        }
+
+        return updatedMemories;
+      });
+      setSelectedMemory((currentMemory) =>
+        currentMemory?.id === memoryId
+          ? {
+              ...currentMemory,
+              isFavorite: updatedMemory.isFavorite,
+              favoritedAt: updatedMemory.favoritedAt,
+            }
+          : currentMemory,
+      );
+
+      if (activeView === 'favorites' && !updatedMemory.isFavorite) {
+        setTotalMemories((currentTotal) => Math.max(0, currentTotal - 1));
+        setViewerMemoryIds(updatedViewerMemoryIds);
+
+        if (selectedMemory?.id === memoryId) {
+          if (fallbackViewerMemoryId) {
+            void openMemory(fallbackViewerMemoryId, updatedViewerMemoryIds);
+          } else {
+            closeMemoryViewer();
+          }
+        }
+      }
+    } catch {
+      setMemories(previousMemories);
+      setSelectedMemory(previousSelectedMemory);
+      setViewerMemoryIds(previousViewerMemoryIds);
+      setError('Could not update Favorites. Try again.');
+    }
+  }
+
   function selectMonth(month: number) {
     setActiveView('archive');
     setSelectedMonth(month);
   }
 
-  async function openMemory(memoryId: string) {
+  async function openMemory(
+    memoryId: string,
+    contextMemoryIds = memories.map((memory) => memory.id),
+  ) {
     setSelectedMemory(null);
     setSelectedMemoryError(null);
     setIsLoadingSelectedMemory(true);
+    setViewerMemoryIds(contextMemoryIds);
 
     try {
       const detail = await getMemoryDetail(memoryId);
@@ -301,8 +395,24 @@ function App() {
 
   function closeMemoryViewer() {
     setSelectedMemory(null);
+    setViewerMemoryIds([]);
     setSelectedMemoryError(null);
     setIsLoadingSelectedMemory(false);
+  }
+
+  function openAdjacentMemory(offset: -1 | 1) {
+    if (!selectedMemory) {
+      return;
+    }
+
+    const currentIndex = viewerMemoryIds.indexOf(selectedMemory.id);
+    const adjacentMemoryId = viewerMemoryIds[currentIndex + offset];
+
+    if (!adjacentMemoryId) {
+      return;
+    }
+
+    void openMemory(adjacentMemoryId, viewerMemoryIds);
   }
 
   function refreshArchiveData() {
@@ -342,6 +452,14 @@ function App() {
       : selectedMonth === undefined
         ? String(selectedYear)
         : `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
+  const currentMemoryIds = memories.map((memory) => memory.id);
+  const selectedMemoryIndex = selectedMemory
+    ? viewerMemoryIds.indexOf(selectedMemory.id)
+    : -1;
+  const hasPreviousMemory = selectedMemoryIndex > 0;
+  const hasNextMemory =
+    selectedMemoryIndex >= 0 &&
+    selectedMemoryIndex < viewerMemoryIds.length - 1;
 
   return (
     <main className="app-shell">
@@ -369,6 +487,20 @@ function App() {
               type="button"
             >
               Archive
+            </button>
+
+            <button
+              className={`sidebar-main-link ${
+                activeView === 'favorites' ? 'is-active' : ''
+              }`}
+              onClick={() => {
+                setActiveView('favorites');
+                setShouldFocusSourceForm(false);
+                setShouldOpenFolderPicker(false);
+              }}
+              type="button"
+            >
+              Favorites
             </button>
 
             <button
@@ -485,7 +617,7 @@ function App() {
       </aside>
 
       <div className="app-content">
-        {activeView === 'archive' ? (
+        {activeView === 'archive' || activeView === 'favorites' ? (
           isLoadingSources ? (
             <section className="content">
               <div className="state-message">Checking setup…</div>
@@ -506,12 +638,19 @@ function App() {
             <section className="content">
               <header className="content-header">
                 <div>
-                  <p className="eyebrow">Memory archive</p>
-                  <h2>{pageTitle}</h2>
+                  <p className="eyebrow">
+                    {activeView === 'favorites'
+                      ? 'Favorites collection'
+                      : 'Memory archive'}
+                  </p>
+                  <h2>
+                    {activeView === 'favorites' ? 'Favorites' : pageTitle}
+                  </h2>
                 </div>
 
                 <p className="memory-count">
-                  {totalMemories.toLocaleString()} memories
+                  {totalMemories.toLocaleString()}{' '}
+                  {activeView === 'favorites' ? 'favorites' : 'memories'}
                   {hasMoreMemories
                     ? ` · ${memories.length.toLocaleString()} shown`
                     : ''}
@@ -526,18 +665,30 @@ function App() {
 
               {!isLoadingMemories && memories.length === 0 && !error && (
                 <div className="state-message archive-empty-state">
-                  <strong>No memories here yet.</strong>
-                  <span>
-                    Scan your configured source to build this private local
-                    archive.
-                  </span>
-                  <button
-                    className="primary-button"
-                    onClick={openSourceCreationFlow}
-                    type="button"
-                  >
-                    Start scanning
-                  </button>
+                  {activeView === 'favorites' ? (
+                    <>
+                      <strong>No favorites yet.</strong>
+                      <span>
+                        Mark memories with the heart icon to find them here
+                        later.
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <strong>No memories here yet.</strong>
+                      <span>
+                        Scan your configured source to build this private local
+                        archive.
+                      </span>
+                      <button
+                        className="primary-button"
+                        onClick={openSourceCreationFlow}
+                        type="button"
+                      >
+                        Start scanning
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -548,7 +699,12 @@ function App() {
                       <MemoryCard
                         key={memory.id}
                         memory={memory}
-                        onOpen={(memoryId) => void openMemory(memoryId)}
+                        onOpen={(memoryId) =>
+                          void openMemory(memoryId, currentMemoryIds)
+                        }
+                        onToggleFavorite={(memoryId, nextFavorite) =>
+                          void toggleFavorite(memoryId, nextFavorite)
+                        }
                         thumbnailUrl={memory.thumbnailUrl}
                       />
                     ))}
@@ -569,7 +725,9 @@ function App() {
 
                   {!hasMoreMemories && memories.length > 0 && (
                     <p className="end-of-list">
-                      You have reached the end of this period.
+                      {activeView === 'favorites'
+                        ? 'You have reached the end of Favorites.'
+                        : 'You have reached the end of this period.'}
                     </p>
                   )}
                 </>
@@ -578,7 +736,9 @@ function App() {
           )
         ) : activeView === 'flashbacks' ? (
           <FlashbacksPage
-            onOpenMemory={(memoryId) => void openMemory(memoryId)}
+            onOpenMemory={(memoryId, contextMemoryIds) =>
+              void openMemory(memoryId, contextMemoryIds)
+            }
           />
         ) : (
           <SettingsPage
@@ -616,9 +776,16 @@ function App() {
 
       <MemoryViewer
         error={selectedMemoryError}
+        hasNext={hasNextMemory}
+        hasPrevious={hasPreviousMemory}
         isLoading={isLoadingSelectedMemory}
         memory={selectedMemory}
         onClose={closeMemoryViewer}
+        onNext={() => openAdjacentMemory(1)}
+        onPrevious={() => openAdjacentMemory(-1)}
+        onToggleFavorite={(memoryId, nextFavorite) =>
+          void toggleFavorite(memoryId, nextFavorite)
+        }
       />
     </main>
   );

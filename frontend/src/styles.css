@@ -72,7 +72,10 @@ a:focus-visible {
   top: 0;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  min-height: 100vh;
+  align-self: start;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
   padding: 24px 16px;
   background: rgb(247 247 248 / 80%);
   border-right: 1px solid var(--line);
@@ -422,14 +425,12 @@ a:focus-visible {
 }
 
 .memory-card {
+  position: relative;
   overflow: hidden;
-  padding: 0;
   color: inherit;
-  cursor: pointer;
   background: var(--panel-solid);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius);
-  text-align: left;
   box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
   transition:
     transform 180ms ease,
@@ -441,6 +442,17 @@ a:focus-visible {
   border-color: #d7d7db;
   box-shadow: var(--shadow-soft);
   transform: translateY(-2px);
+}
+
+.memory-card-open {
+  display: grid;
+  width: 100%;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  text-align: left;
 }
 
 .memory-preview {
@@ -552,6 +564,45 @@ a:focus-visible {
   flex: 0 0 auto;
   color: var(--subtle);
   font-size: 0.76rem;
+}
+
+.favorite-button,
+.memory-viewer-favorite {
+  display: grid;
+  place-items: center;
+  color: white;
+  cursor: pointer;
+  background: rgb(22 22 24 / 58%);
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  backdrop-filter: blur(14px);
+  transition:
+    background 160ms ease,
+    transform 160ms ease,
+    color 160ms ease;
+}
+
+.favorite-button {
+  position: absolute;
+  z-index: 2;
+  right: 9px;
+  bottom: 50px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  font-size: 1.18rem;
+}
+
+.favorite-button:hover,
+.memory-viewer-favorite:hover {
+  background: rgb(22 22 24 / 78%);
+  transform: translateY(-1px);
+}
+
+.favorite-button.is-favorite,
+.memory-viewer-favorite.is-favorite {
+  color: #ff6f91;
+  background: rgb(22 22 24 / 74%);
 }
 
 .state-message,
@@ -689,6 +740,62 @@ a:focus-visible {
   backdrop-filter: blur(14px);
   font-size: 0.82rem;
   font-weight: 700;
+}
+
+.memory-viewer-favorite {
+  position: absolute;
+  z-index: 3;
+  top: 14px;
+  right: 82px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  font-size: 1.2rem;
+}
+
+.memory-viewer-nav {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 11px;
+  color: white;
+  cursor: pointer;
+  background: rgb(22 22 24 / 62%);
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 999px;
+  backdrop-filter: blur(14px);
+  font-size: 0.82rem;
+  font-weight: 750;
+  transform: translateY(-50%);
+  transition:
+    background 160ms ease,
+    opacity 160ms ease;
+}
+
+.memory-viewer-nav span[aria-hidden='true'] {
+  font-size: 1.55rem;
+  line-height: 1;
+}
+
+.memory-viewer-nav:hover:not(:disabled) {
+  background: rgb(22 22 24 / 84%);
+}
+
+.memory-viewer-nav:disabled {
+  cursor: not-allowed;
+  opacity: 0.34;
+}
+
+.memory-viewer-nav-previous {
+  left: 14px;
+}
+
+.memory-viewer-nav-next {
+  right: 14px;
 }
 
 .memory-viewer-close:hover {
@@ -995,6 +1102,70 @@ a:focus-visible {
   font-size: 0.88rem;
 }
 
+.confirmation-backdrop {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(0 0 0 / 42%);
+  backdrop-filter: blur(10px);
+}
+
+.confirmation-dialog {
+  display: grid;
+  gap: 12px;
+  width: min(460px, 100%);
+  padding: 22px;
+  color: var(--text);
+  background: var(--panel-solid);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+}
+
+.confirmation-dialog h3,
+.confirmation-dialog p {
+  margin: 0;
+}
+
+.confirmation-dialog p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.restore-preview-list {
+  display: grid;
+  gap: 8px;
+  margin: 2px 0;
+}
+
+.restore-preview-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.restore-preview-list dt {
+  color: var(--muted);
+}
+
+.restore-preview-list dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.confirmation-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
 .scan-progress-track {
   width: min(520px, 100%);
   height: 7px;
@@ -1040,7 +1211,9 @@ a:focus-visible {
 
   .sidebar {
     position: static;
+    height: auto;
     min-height: auto;
+    overflow: visible;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
@@ -1122,5 +1295,21 @@ a:focus-visible {
   .memory-viewer-image,
   .memory-viewer-video {
     max-height: calc(100vh - 105px);
+  }
+
+  .memory-viewer-nav {
+    top: auto;
+    bottom: 68px;
+    min-height: 38px;
+    padding: 7px 10px;
+    transform: none;
+  }
+
+  .memory-viewer-nav-previous {
+    left: 12px;
+  }
+
+  .memory-viewer-nav-next {
+    right: 12px;
   }
 }

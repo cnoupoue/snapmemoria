@@ -1,6 +1,21 @@
-# macOS packaging
+# macOS Release
+
+## Purpose
+
+This document explains how Memoria Vault is packaged, signed, notarized, stapled, verified, and
+distributed on macOS.
 
 macOS packaging is currently implemented for Apple Silicon (`arm64`).
+
+## Required Apple Assets
+
+Signed releases require:
+
+- Developer ID Application certificate
+- Matching private key exported in a `.p12`
+- App-specific Apple password for notarization
+- Apple Developer Team ID
+- GitHub Actions secrets for certificate import, signing identity, and notarization credentials
 
 Current macOS-specific assets:
 
@@ -15,7 +30,7 @@ The generated jpackage app image is expected to contain:
 - `Memoria Vault.app/Contents/app/ffmpeg/ffmpeg`
 - `Memoria Vault.app/Contents/runtime`
 
-## Unsigned development packaging
+## Unsigned Development Packaging
 
 `make package-macos` is for local development only. It builds the production JAR, creates an
 unsigned app image, and creates an unsigned DMG. That DMG is useful for smoke testing packaging, but
@@ -24,7 +39,7 @@ it is not a release artifact and is not uploaded by CI.
 Release DMG generation must happen after app signing. Do not rebuild or overwrite
 `dist/app/Memoria Vault.app` after `make sign-macos-app`.
 
-## Signed and notarized release packaging
+## Signed And Notarized Release Packaging
 
 The release pipeline is intentionally split into deterministic stages:
 
@@ -50,6 +65,12 @@ The release pipeline is intentionally split into deterministic stages:
 19. Publish the notarized DMG and checksum to GitHub Release
 ```
 
+High-level flow:
+
+```text
+build -> package app -> sign nested code -> create DMG -> notarize -> staple -> publish
+```
+
 The Makefile targets are:
 
 ```text
@@ -70,6 +91,10 @@ package-macos-release
 does not invoke `package-macos-app`. Verification inspects `codesign -dv --verbose=4` metadata, not
 only `codesign --verify`, and fails on missing Developer ID authority, Team ID mismatch, missing
 secure timestamp, missing Hardened Runtime, or ad-hoc signatures.
+
+Do not use `jpackage --type dmg` for the signed release DMG. That path can rebuild or repackage the
+app after signing. The release flow uses `packaging/macos/scripts/create-dmg.sh` so the signed app is
+copied into the DMG without being rebuilt.
 
 Apple notarization scans native libraries embedded inside nested dependency JARs. The release path
 therefore signs `org/sqlite/native/Mac/*/libsqlitejdbc.dylib` inside the packaged
@@ -109,7 +134,31 @@ security find-identity -v -p codesigning
 The expected Developer ID identity should be listed. If it is not listed locally, fix the certificate
 and private key in Keychain Access before creating the `.p12` secret.
 
-## Local signing test
+## Entitlements
+
+The signed app uses Hardened Runtime plus the minimum JVM startup entitlements in
+`entitlements/memoria-vault.entitlements.plist`:
+
+- `com.apple.security.cs.allow-jit`
+- `com.apple.security.cs.allow-unsigned-executable-memory`
+
+These entitlements are needed by the bundled JVM at startup. They are applied to the outer app
+bundle, the jpackage launcher, the bundled `java` executable, and `libjvm.dylib`. The stricter
+verification scripts fail the release if those JVM entitlements are missing.
+
+## Manual Checks
+
+Use these commands when validating a local signed release candidate:
+
+```bash
+codesign --verify --deep --strict --verbose=4 "dist/app/Memoria Vault.app"
+spctl --assess --type execute --verbose=4 "dist/app/Memoria Vault.app"
+xcrun stapler validate "dist/installers/Memoria-Vault-<version>-macos-arm64.dmg"
+spctl --assess --type open --context context:primary-signature --verbose=4 \
+  "dist/installers/Memoria-Vault-<version>-macos-arm64.dmg"
+```
+
+## Local Signing Test
 
 Run this before pushing a release tag when the Developer ID Application certificate is available
 locally:
@@ -127,6 +176,17 @@ make package-macos-dmg-from-signed-app
 APPLE_DEVELOPER_ID_APPLICATION="Developer ID Application: Example Name (TEAMID)" \
   make sign-macos-dmg
 ```
+
+After local signing, run a launch smoke test before notarizing or publishing:
+
+```bash
+open "dist/app/Memoria Vault.app"
+sleep 8
+pgrep -fl "Memoria Vault|java" || true
+```
+
+If the app exits immediately, inspect the latest macOS crash report for `Memoria Vault` before
+creating a release DMG.
 
 Local notarization is optional. Supply credentials only through environment variables or a
 Keychain-backed notarytool profile:
@@ -150,7 +210,18 @@ xcrun notarytool submit "$DMG" \
   --wait
 ```
 
-## Signing readiness
+## Release Tags
+
+The GitHub Actions release workflow runs when a semantic version tag is pushed:
+
+```bash
+git tag -a v0.1.0 -m "Memoria Vault v0.1.0"
+git push origin v0.1.0
+```
+
+Run `make verify` and local packaging checks before pushing a release tag.
+
+## Signing Readiness
 
 Run the non-blocking inspection after building the app image:
 
@@ -186,6 +257,7 @@ Strict mode:
 - requires `TeamIdentifier` to match `APPLE_TEAM_ID`, or the Team ID parsed from the signing identity;
 - requires a secure timestamp;
 - requires the Hardened Runtime `runtime` flag for Mach-O code;
+- requires JVM startup entitlements on the app bundle, launcher, bundled `java`, and `libjvm.dylib`;
 - verifies bundled FFmpeg with `codesign --verify --strict`;
 - verifies native SQLite libraries embedded inside the packaged `sqlite-jdbc-*.jar`;
 - rejects dynamic dependencies that point to Homebrew, user-local, temporary, or mounted-volume

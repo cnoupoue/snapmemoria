@@ -24,7 +24,6 @@ import org.springframework.stereotype.Service;
 @Service
 public class MemorySourceScanner {
 
-  private static final int BATCH_SIZE = 500;
   private static final int PROGRESS_UPDATE_INTERVAL = 250;
 
   private static final Pattern SNAPCHAT_FILE_PATTERN =
@@ -72,13 +71,8 @@ public class MemorySourceScanner {
 
       ensureAvailable(rootPath);
 
-      /*
-       * The indexed entries for this source are replaced.
-       * Original Snapchat files are never modified or removed.
-       */
-      memoryIndexPersistence.deleteBySourceId(sourceId);
-
-      indexFiles(source, rootPath, counters, progressListener);
+      List<SnapMemory> scannedMemories = indexFiles(source, rootPath, counters, progressListener);
+      memoryIndexPersistence.synchronizeSourceMemories(sourceId, scannedMemories);
 
       String completedAt = Instant.now().toString();
 
@@ -112,28 +106,28 @@ public class MemorySourceScanner {
     }
   }
 
-  private void indexFiles(
+  private List<SnapMemory> indexFiles(
       MemorySource source,
       Path rootPath,
       ScanCounters counters,
       Consumer<ScanProgress> progressListener) {
-    List<SnapMemory> batch = new ArrayList<>(BATCH_SIZE);
+    List<SnapMemory> scannedMemories = new ArrayList<>();
 
     try (var paths = Files.walk(rootPath)) {
       paths
           .filter(Files::isRegularFile)
-          .forEach(path -> processFile(source, path, batch, counters, progressListener));
+          .forEach(path -> processFile(source, path, scannedMemories, counters, progressListener));
     } catch (IOException exception) {
       throw new SourceUnavailableDuringScanException();
     }
 
-    saveBatchIfNeeded(batch);
+    return scannedMemories;
   }
 
   private void processFile(
       MemorySource source,
       Path filePath,
-      List<SnapMemory> batch,
+      List<SnapMemory> scannedMemories,
       ScanCounters counters,
       Consumer<ScanProgress> progressListener) {
     counters.filesProcessed++;
@@ -166,17 +160,15 @@ public class MemorySourceScanner {
     SnapMemory memory = createMemory(source, filePath, asset, counters);
 
     if (memory != null) {
-      batch.add(memory);
+      scannedMemories.add(memory);
       counters.indexedMemories++;
 
       if (memory.getOverlayPath() != null) {
         counters.attachedOverlays++;
       }
 
-      if (batch.size() >= BATCH_SIZE) {
-        memoryIndexPersistence.saveBatch(List.copyOf(batch));
-        batch.clear();
-      }
+      reportProgressIfNeeded(counters, progressListener);
+      return;
     }
 
     reportProgressIfNeeded(counters, progressListener);
@@ -278,13 +270,6 @@ public class MemorySourceScanner {
     }
 
     return new ParsedSnapchatAsset(capturedAt, memoryId, false, mediaType);
-  }
-
-  private void saveBatchIfNeeded(List<SnapMemory> batch) {
-    if (!batch.isEmpty()) {
-      memoryIndexPersistence.saveBatch(List.copyOf(batch));
-      batch.clear();
-    }
   }
 
   private void reportProgressIfNeeded(

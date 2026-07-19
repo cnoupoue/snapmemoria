@@ -1,8 +1,11 @@
 import type {
   CreateMemorySourceRequest,
   Diagnostics,
+  FavoritesBackup,
+  FavoritesRestoreSummary,
   FlashbackResponse,
   FolderSelection,
+  Memory,
   MemoryDetail,
   MemoryPage,
   MemorySource,
@@ -96,8 +99,29 @@ export function getMemories(
   return request<MemoryPage>(`/api/memories?${params.toString()}`);
 }
 
+export function getFavoriteMemories(page = 0, size = 48): Promise<MemoryPage> {
+  const params = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+  });
+
+  return request<MemoryPage>(`/api/memories/favorites?${params.toString()}`);
+}
+
 export function getMemoryDetail(memoryId: string): Promise<MemoryDetail> {
   return request<MemoryDetail>(`/api/memories/${memoryId}`);
+}
+
+export function addMemoryFavorite(memoryId: string): Promise<Memory> {
+  return request<Memory>(`/api/memories/${memoryId}/favorite`, {
+    method: 'PUT',
+  });
+}
+
+export function removeMemoryFavorite(memoryId: string): Promise<Memory> {
+  return request<Memory>(`/api/memories/${memoryId}/favorite`, {
+    method: 'DELETE',
+  });
 }
 
 export function prepareCompatibilityPlayback(
@@ -143,6 +167,44 @@ export function getMemorySourceAvailability(
   sourceId: string,
 ): Promise<SourceAvailability> {
   return request<SourceAvailability>(`/api/sources/${sourceId}/availability`);
+}
+
+export function exportMemorySourceFavoritesBackup(
+  sourceId: string,
+): Promise<FavoritesBackup> {
+  return request<FavoritesBackup>(`/api/sources/${sourceId}/favorites-backup`);
+}
+
+export function previewMemorySourceFavoritesRestore(
+  sourceId: string,
+  backup: FavoritesBackup,
+): Promise<FavoritesRestoreSummary> {
+  return request<FavoritesRestoreSummary>(
+    `/api/sources/${sourceId}/favorites-backup/preview`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(backup),
+    },
+  );
+}
+
+export function restoreMemorySourceFavoritesBackup(
+  sourceId: string,
+  backup: FavoritesBackup,
+): Promise<FavoritesRestoreSummary> {
+  return request<FavoritesRestoreSummary>(
+    `/api/sources/${sourceId}/favorites-backup/restore`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(backup),
+    },
+  );
 }
 
 export function createMemorySource(

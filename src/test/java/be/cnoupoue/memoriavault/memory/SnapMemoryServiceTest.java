@@ -6,8 +6,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -22,6 +24,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class SnapMemoryServiceTest {
+
+  private static final Clock FIXED_CLOCK =
+      Clock.fixed(Instant.parse("2026-07-18T10:15:30Z"), ZoneOffset.UTC);
 
   @Mock private SnapMemoryRepository snapMemoryRepository;
 
@@ -44,6 +49,8 @@ class SnapMemoryServiceTest {
     assertThat(response.content()).hasSize(1);
     assertThat(response.content().getFirst().thumbnailUrl())
         .isEqualTo("/api/memories/memory-1/thumbnail");
+    assertThat(response.content().getFirst().isFavorite()).isFalse();
+    assertThat(response.content().getFirst().favoritedAt()).isNull();
   }
 
   @Test
@@ -105,6 +112,8 @@ class SnapMemoryServiceTest {
     assertThat(response.mediaUrl()).isEqualTo("/api/memories/memory-detail/media");
     assertThat(response.overlayUrl()).isEqualTo("/api/memories/memory-detail/overlay");
     assertThat(response.hasOverlay()).isTrue();
+    assertThat(response.isFavorite()).isFalse();
+    assertThat(response.favoritedAt()).isNull();
   }
 
   @Test
@@ -118,8 +127,114 @@ class SnapMemoryServiceTest {
         .hasMessageContaining("404 NOT_FOUND");
   }
 
+  @Test
+  void addsFavoriteAndReturnsUpdatedMemoryState() {
+    SnapMemoryService service = new SnapMemoryService(snapMemoryRepository, FIXED_CLOCK);
+    SnapMemory memory = memory("memory-1", "2024-06-10", SnapMemoryType.IMAGE, null);
+
+    when(snapMemoryRepository.findById("memory-1")).thenReturn(Optional.of(memory));
+
+    var response = service.addFavorite("memory-1");
+
+    assertThat(response.isFavorite()).isTrue();
+    assertThat(response.favoritedAt()).isEqualTo("2026-07-18T10:15:30Z");
+    assertThat(memory.isFavorite()).isTrue();
+    assertThat(memory.getFavoritedAt()).isEqualTo("2026-07-18T10:15:30Z");
+  }
+
+  @Test
+  void addFavoriteIsIdempotentAndKeepsOriginalFavoriteDate() {
+    SnapMemoryService service = new SnapMemoryService(snapMemoryRepository, FIXED_CLOCK);
+    SnapMemory memory =
+        memory("memory-1", "2024-06-10", SnapMemoryType.IMAGE, null, true, "2026-07-01T00:00:00Z");
+
+    when(snapMemoryRepository.findById("memory-1")).thenReturn(Optional.of(memory));
+
+    var response = service.addFavorite("memory-1");
+
+    assertThat(response.isFavorite()).isTrue();
+    assertThat(response.favoritedAt()).isEqualTo("2026-07-01T00:00:00Z");
+  }
+
+  @Test
+  void removesFavoriteAndReturnsUpdatedMemoryState() {
+    SnapMemoryService service = new SnapMemoryService(snapMemoryRepository, FIXED_CLOCK);
+    SnapMemory memory =
+        memory("memory-1", "2024-06-10", SnapMemoryType.IMAGE, null, true, "2026-07-01T00:00:00Z");
+
+    when(snapMemoryRepository.findById("memory-1")).thenReturn(Optional.of(memory));
+
+    var response = service.removeFavorite("memory-1");
+
+    assertThat(response.isFavorite()).isFalse();
+    assertThat(response.favoritedAt()).isNull();
+    assertThat(memory.isFavorite()).isFalse();
+    assertThat(memory.getFavoritedAt()).isNull();
+  }
+
+  @Test
+  void removeFavoriteIsIdempotent() {
+    SnapMemoryService service = new SnapMemoryService(snapMemoryRepository, FIXED_CLOCK);
+    SnapMemory memory = memory("memory-1", "2024-06-10", SnapMemoryType.IMAGE, null);
+
+    when(snapMemoryRepository.findById("memory-1")).thenReturn(Optional.of(memory));
+
+    var response = service.removeFavorite("memory-1");
+
+    assertThat(response.isFavorite()).isFalse();
+    assertThat(response.favoritedAt()).isNull();
+  }
+
+  @Test
+  void listsFavoritesWithMemoryDateNewestFirstSortAndStableFallbacks() {
+    SnapMemoryService service = new SnapMemoryService(snapMemoryRepository);
+    SnapMemory favorite =
+        memory(
+            "favorite-1", "2024-06-10", SnapMemoryType.IMAGE, null, true, "2026-07-18T10:15:30Z");
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+
+    when(snapMemoryRepository.findFavorites(any(Pageable.class)))
+        .thenReturn(new PageImpl<>(List.of(favorite), PageRequest.of(0, 60), 1));
+
+    var response = service.findFavorites(-2, 500);
+
+    verify(snapMemoryRepository).findFavorites(pageableCaptor.capture());
+    assertThat(pageableCaptor.getValue().getPageNumber()).isZero();
+    assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(100);
+    assertThat(pageableCaptor.getValue().getSort().getOrderFor("capturedAt").isDescending())
+        .isTrue();
+    assertThat(pageableCaptor.getValue().getSort().getOrderFor("lastModifiedAt").isDescending())
+        .isTrue();
+    assertThat(pageableCaptor.getValue().getSort().getOrderFor("createdAt").isDescending())
+        .isTrue();
+    assertThat(response.content()).hasSize(1);
+    assertThat(response.content().getFirst().isFavorite()).isTrue();
+    assertThat(response.content().getFirst().favoritedAt()).isEqualTo("2026-07-18T10:15:30Z");
+  }
+
+  @Test
+  void throwsNotFoundWhenFavoritingMissingMemory() {
+    SnapMemoryService service = new SnapMemoryService(snapMemoryRepository, FIXED_CLOCK);
+
+    when(snapMemoryRepository.findById("missing")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.addFavorite("missing"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("404 NOT_FOUND");
+  }
+
   private SnapMemory memory(
       String id, String capturedAt, SnapMemoryType mediaType, String overlayPath) {
+    return memory(id, capturedAt, mediaType, overlayPath, false, null);
+  }
+
+  private SnapMemory memory(
+      String id,
+      String capturedAt,
+      SnapMemoryType mediaType,
+      String overlayPath,
+      boolean isFavorite,
+      String favoritedAt) {
     String now = Instant.now().toString();
 
     return new SnapMemory(
@@ -133,6 +248,8 @@ class SnapMemoryServiceTest {
         123,
         now,
         now,
-        now);
+        now,
+        isFavorite,
+        favoritedAt);
   }
 }
