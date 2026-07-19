@@ -47,6 +47,23 @@ public class MemorySourceController {
     return memorySourceService.checkAvailability(id);
   }
 
+  @GetMapping("/{id}/favorites-backup")
+  public FavoritesBackupResponse exportFavoritesBackup(@PathVariable String id) {
+    return memorySourceService.exportFavoritesBackup(id);
+  }
+
+  @PostMapping("/{id}/favorites-backup/preview")
+  public FavoritesRestoreSummaryResponse previewFavoritesRestore(
+      @PathVariable String id, @Valid @RequestBody ImportFavoritesBackupRequest request) {
+    return memorySourceService.previewFavoritesRestore(id, request);
+  }
+
+  @PostMapping("/{id}/favorites-backup/restore")
+  public FavoritesRestoreSummaryResponse restoreFavoritesBackup(
+      @PathVariable String id, @Valid @RequestBody ImportFavoritesBackupRequest request) {
+    return memorySourceService.restoreFavoritesBackup(id, request);
+  }
+
   @PostMapping("/{id}/scan")
   @ResponseStatus(HttpStatus.ACCEPTED)
   public MemoryScanJobResponse scan(@PathVariable String id) {

@@ -7,6 +7,8 @@ EXPECTED_IDENTITY="${APPLE_DEVELOPER_ID_APPLICATION:-}"
 EXPECTED_TEAM="${APPLE_TEAM_ID:-}"
 DIAGNOSTIC="${MACOS_SIGNING_DIAGNOSTIC:-0}"
 SUMMARY_DIR="${MACOS_SIGNING_SUMMARY_DIR:-}"
+DEFAULT_ENTITLEMENTS_PATH="$SCRIPT_DIR/../entitlements/memoria-vault.entitlements.plist"
+ENTITLEMENTS_PATH="${MACOS_ENTITLEMENTS_PATH:-$DEFAULT_ENTITLEMENTS_PATH}"
 
 # shellcheck source=packaging/macos/scripts/app-jar.sh
 . "$SCRIPT_DIR/app-jar.sh"
@@ -21,6 +23,11 @@ if [ ! -d "$APP_PATH" ]; then
   exit 1
 fi
 APP_PATH="$(resolve_absolute_path "$APP_PATH")"
+
+if [ ! -f "$ENTITLEMENTS_PATH" ]; then
+  echo "Missing macOS entitlements file." >&2
+  exit 1
+fi
 
 if [ -z "$EXPECTED_TEAM" ] && [ -n "$EXPECTED_IDENTITY" ]; then
   EXPECTED_TEAM="$(printf '%s\n' "$EXPECTED_IDENTITY" | sed -n 's/.*(\([^()]*\)).*/\1/p')"
@@ -84,6 +91,18 @@ metadata_value() {
 metadata_authorities() {
   file="$1"
   sed -n 's/^Authority=//p' "$file"
+}
+
+entitlement_enabled() {
+  key="$1"
+  file="$2"
+  awk -v key="$key" '
+    index($0, "<key>" key "</key>") && /<true\/>/ { found = 1; exit }
+    index($0, "<key>" key "</key>") { looking = 1; next }
+    looking && /<true\/>/ { found = 1; exit }
+    looking && (/<false\/>/ || /<key>/) { exit }
+    END { exit(found ? 0 : 1) }
+  ' "$file"
 }
 
 record_line() {
@@ -210,6 +229,38 @@ verify_macho_metadata() {
   esac
 }
 
+verify_required_entitlements() {
+  target="$1"
+  label="$2"
+  entitlements_file="$WORK_DIR/entitlements-$ENTITLEMENTS_TOTAL.plist"
+
+  ENTITLEMENTS_TOTAL=$((ENTITLEMENTS_TOTAL + 1))
+
+  if [ ! -e "$target" ]; then
+    record_error "Required JVM entitlement target is missing: $label"
+    return
+  fi
+
+  if ! codesign -d --entitlements :- "$target" >"$entitlements_file" 2>/dev/null; then
+    record_error "Unable to inspect required JVM entitlements: $label"
+    return
+  fi
+
+  if ! entitlement_enabled "com.apple.security.cs.allow-jit" "$entitlements_file"; then
+    record_error "Missing required JVM entitlement com.apple.security.cs.allow-jit: $label"
+    return
+  fi
+
+  if ! entitlement_enabled "com.apple.security.cs.allow-unsigned-executable-memory" "$entitlements_file"; then
+    record_error "Missing required JVM entitlement com.apple.security.cs.allow-unsigned-executable-memory: $label"
+    return
+  fi
+
+  ENTITLEMENTS_VERIFIED=$((ENTITLEMENTS_VERIFIED + 1))
+  record_line "$label"
+  record_line "  Required JVM entitlements: verified"
+}
+
 extract_and_record_sqlite_dylibs() {
   app_jar="$1"
   app_label="$2"
@@ -273,6 +324,9 @@ SQLITE_VERIFIED=0
 RUNTIME_FILES=0
 FFMPEG_STATUS="missing"
 APP_STATUS="not checked"
+ENTITLEMENTS_TOTAL=0
+ENTITLEMENTS_VERIFIED=0
+JVM_ENTITLEMENTS_STATUS="not checked"
 
 while IFS="$(printf '\t')" read -r path label; do
   [ -n "$path" ] || continue
@@ -301,6 +355,17 @@ else
   record_error "Final app bundle signature verification failed."
 fi
 
+verify_required_entitlements "$APP_PATH" "$(basename "$APP_PATH")"
+verify_required_entitlements "$APP_PATH/Contents/MacOS/Memoria Vault" "Contents/MacOS/Memoria Vault"
+verify_required_entitlements "$APP_PATH/Contents/runtime/Contents/Home/bin/java" "Contents/runtime/Contents/Home/bin/java"
+verify_required_entitlements "$APP_PATH/Contents/runtime/Contents/Home/lib/server/libjvm.dylib" "Contents/runtime/Contents/Home/lib/server/libjvm.dylib"
+
+if [ "$ENTITLEMENTS_TOTAL" -gt 0 ] && [ "$ENTITLEMENTS_VERIFIED" -eq "$ENTITLEMENTS_TOTAL" ]; then
+  JVM_ENTITLEMENTS_STATUS="verified"
+else
+  JVM_ENTITLEMENTS_STATUS="invalid"
+fi
+
 echo "macOS notarization-ready signature verification summary"
 echo "  Mach-O files detected:          $TOTAL"
 echo "  Developer ID verified:         $DEVELOPER_ID_VERIFIED"
@@ -313,6 +378,7 @@ echo "  FFmpeg:                        $FFMPEG_STATUS"
 echo "  Java runtime files verified:   $RUNTIME_FILES"
 echo "  SQLite native libraries:       $SQLITE_VERIFIED"
 echo "  App bundle:                    $APP_STATUS"
+echo "  Required JVM entitlements:     $JVM_ENTITLEMENTS_STATUS"
 
 if [ -n "$SUMMARY_DIR" ]; then
   cp "$SIGNING_SUMMARY" "$SUMMARY_DIR/signing-metadata-summary.txt"
@@ -321,6 +387,6 @@ if [ -n "$SUMMARY_DIR" ]; then
   cp "$FFMPEG_SUMMARY" "$SUMMARY_DIR/ffmpeg-signing-summary.txt"
 fi
 
-if [ "$ERRORS" -gt 0 ] || [ "$TOTAL" -eq 0 ] || [ "$DEVELOPER_ID_VERIFIED" -ne "$TOTAL" ] || [ "$TIMESTAMP_VERIFIED" -ne "$TOTAL" ] || [ "$RUNTIME_VERIFIED" -ne "$TOTAL" ] || [ "$TEAM_VERIFIED" -ne "$TOTAL" ] || [ "$ADHOC" -ne 0 ] || [ "$UNSAFE_DEPS" -ne 0 ] || [ "$FFMPEG_STATUS" != "Developer ID verified" ] || [ "$SQLITE_VERIFIED" -lt 2 ] || [ "$APP_STATUS" != "Developer ID verified" ]; then
+if [ "$ERRORS" -gt 0 ] || [ "$TOTAL" -eq 0 ] || [ "$DEVELOPER_ID_VERIFIED" -ne "$TOTAL" ] || [ "$TIMESTAMP_VERIFIED" -ne "$TOTAL" ] || [ "$RUNTIME_VERIFIED" -ne "$TOTAL" ] || [ "$TEAM_VERIFIED" -ne "$TOTAL" ] || [ "$ADHOC" -ne 0 ] || [ "$UNSAFE_DEPS" -ne 0 ] || [ "$FFMPEG_STATUS" != "Developer ID verified" ] || [ "$SQLITE_VERIFIED" -lt 2 ] || [ "$APP_STATUS" != "Developer ID verified" ] || [ "$JVM_ENTITLEMENTS_STATUS" != "verified" ]; then
   exit 1
 fi

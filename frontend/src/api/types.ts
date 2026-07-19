@@ -16,6 +16,8 @@ export type Memory = {
   fileSizeBytes: number;
   lastModifiedAt: string;
   thumbnailUrl: string | null;
+  isFavorite: boolean;
+  favoritedAt: string | null;
 };
 
 export type MemoryPage = {
@@ -35,6 +37,8 @@ export type MemoryDetail = {
   lastModifiedAt: string;
   mediaUrl: string;
   overlayUrl: string | null;
+  isFavorite: boolean;
+  favoritedAt: string | null;
 };
 
 export type FlashbackMemory = {
@@ -60,8 +64,37 @@ export type MemorySource = {
   lastScanStatus: string | null;
   availabilityStatus: SourceAvailabilityStatus;
   availabilityMessage: string;
+  favoriteCount: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type FavoriteBackupMemory = {
+  memoryId: string;
+  externalMemoryId: string;
+  capturedAt: string;
+  mediaType: 'IMAGE' | 'VIDEO';
+  mainPath: string;
+  favoritedAt: string | null;
+};
+
+export type FavoritesBackup = {
+  version: number;
+  exportedAt: string;
+  source?: {
+    id: string;
+    name: string;
+  };
+  sourceId: string;
+  favorites: FavoriteBackupMemory[];
+};
+
+export type FavoritesRestoreSummary = {
+  totalFavorites: number;
+  restorable: number;
+  restored: number;
+  alreadyFavorite: number;
+  notFound: number;
 };
 
 export type SourceAvailabilityStatus =

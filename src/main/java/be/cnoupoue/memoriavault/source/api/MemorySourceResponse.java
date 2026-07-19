@@ -8,5 +8,6 @@ public record MemorySourceResponse(
     String lastScanStatus,
     String availabilityStatus,
     String availabilityMessage,
+    long favoriteCount,
     String createdAt,
     String updatedAt) {}

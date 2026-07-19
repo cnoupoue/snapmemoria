@@ -8,4 +8,6 @@ public record MemoryDetailResponse(
     long fileSizeBytes,
     String lastModifiedAt,
     String mediaUrl,
-    String overlayUrl) {}
+    String overlayUrl,
+    boolean isFavorite,
+    String favoritedAt) {}

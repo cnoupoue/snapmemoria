@@ -20,6 +20,7 @@ jobs:
     env:
       HUSKY: 0
       MACOS_NOTARIZATION_ARTIFACT_DIR: dist/notarization
+      MACOS_ENTITLEMENTS_PATH: packaging/macos/entitlements/memoria-vault.entitlements.plist
 
     steps:
       - name: Check out pushed tag

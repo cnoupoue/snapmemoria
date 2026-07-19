@@ -7,7 +7,7 @@ import type { FlashbackMemory, FlashbackResponse } from '../api/types';
 import { MemoryCard } from './MemoryCard';
 
 type FlashbacksPageProps = {
-  onOpenMemory: (memoryId: string) => void;
+  onOpenMemory: (memoryId: string, contextMemoryIds: string[]) => void;
 };
 
 function formatDateForInput(date: Date): string {
@@ -109,6 +109,9 @@ export function FlashbacksPage({ onOpenMemory }: FlashbacksPageProps) {
         ([firstYear], [secondYear]) => secondYear - firstYear,
       )
     : [];
+  const memoryIdsInCurrentContext = memoriesByYear.flatMap(([, memories]) =>
+    memories.map((memory) => memory.id),
+  );
 
   return (
     <section className="content">
@@ -175,7 +178,9 @@ export function FlashbacksPage({ onOpenMemory }: FlashbacksPageProps) {
                 <MemoryCard
                   key={memory.id}
                   memory={memory}
-                  onOpen={onOpenMemory}
+                  onOpen={(memoryId) =>
+                    onOpenMemory(memoryId, memoryIdsInCurrentContext)
+                  }
                 />
               ))}
             </div>

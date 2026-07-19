@@ -7,4 +7,6 @@ public record MemoryResponse(
     boolean hasOverlay,
     long fileSizeBytes,
     String lastModifiedAt,
-    String thumbnailUrl) {}
+    String thumbnailUrl,
+    boolean isFavorite,
+    String favoritedAt) {}

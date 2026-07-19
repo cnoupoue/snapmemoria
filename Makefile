@@ -30,8 +30,9 @@ BUNDLED_FFMPEG_APP_PATH ?= $(MACOS_APP_PATH)/Contents/app/$(BUNDLED_FFMPEG_APP_D
 MACOS_NOTARIZATION_ARTIFACT_DIR ?= $(DIST_DIR)/notarization
 MACOS_DMG_SHA256_PATH ?= $(MACOS_DMG_PATH).sha256
 MACOS_PRISTINE_APP_JAR_BASELINE ?= $(APP_OUTPUT_DIR)/.pristine-packaged-app.jar
+MACOS_ENTITLEMENTS_PATH ?= $(MACOS_PACKAGING_DIR)/entitlements/memoria-vault.entitlements.plist
 
-.PHONY: help install dev run-backend run-frontend \
+.PHONY: help install dev \
 	format format-backend format-frontend \
 	format-check format-check-backend format-check-frontend \
 	lint lint-frontend lint-branding lint-fix test test-backend test-frontend test-packaging \
@@ -48,7 +49,7 @@ MACOS_PRISTINE_APP_JAR_BASELINE ?= $(APP_OUTPUT_DIR)/.pristine-packaged-app.jar
 	check-bundled-ffmpeg prepare-bundled-ffmpeg inspect-bundled-ffmpeg \
 	inspect-macos-signing-readiness test-macos-signing-readiness test-macos-release-pipeline \
 	check-macos check-macos-arm64 check-jpackage check-icon-tools \
-	check-production-jar tag push-tag verify clean health
+	check-production-jar verify clean health
 
 help: ## Show available commands
 	@echo ""
@@ -79,12 +80,6 @@ dev: ## Start backend and frontend together
 	npm --prefix frontend run dev & frontend_pid=$$!; \
 	trap 'kill $$backend_pid $$frontend_pid 2>/dev/null || true' INT TERM EXIT; \
 	wait $$backend_pid $$frontend_pid
-
-run-backend: ## Start only the Spring Boot backend
-	./mvnw spring-boot:run
-
-run-frontend: ## Start only the React frontend
-	npm --prefix frontend run dev
 
 format: ## Automatically format Java and frontend code
 	$(MAKE) format-backend
@@ -264,11 +259,11 @@ postprocess-macos-sqlite-native-libs: check-macos ## Sign SQLite native librarie
 sign-macos-app: check-macos ## Sign nested Mach-O code and the final existing macOS app bundle
 	@test -d "$(MACOS_APP_PATH)" || { echo "Missing app bundle: $(MACOS_APP_PATH). Run 'make package-macos-app' first."; exit 1; }
 	@$(MAKE) validate-macos-postprocessed-packaged-app
-	@packaging/macos/scripts/sign-app.sh "$(MACOS_APP_PATH)"
+	@MACOS_ENTITLEMENTS_PATH="$(MACOS_ENTITLEMENTS_PATH)" packaging/macos/scripts/sign-app.sh "$(MACOS_APP_PATH)"
 
 verify-macos-signatures: check-macos ## Strictly verify all nested signatures and the final app bundle
 	@$(MAKE) validate-macos-postprocessed-packaged-app
-	@packaging/macos/scripts/verify-signatures.sh "$(MACOS_APP_PATH)"
+	@MACOS_ENTITLEMENTS_PATH="$(MACOS_ENTITLEMENTS_PATH)" packaging/macos/scripts/verify-signatures.sh "$(MACOS_APP_PATH)"
 
 package-macos-dmg: package-macos-app ## Create an unsigned development DMG; do not use for signed releases
 	@rm -f "$(MACOS_DMG_PATH)"
@@ -283,21 +278,11 @@ package-macos-dmg: package-macos-app ## Create an unsigned development DMG; do n
 		--mac-package-identifier "$(APP_ID)"
 	@mv "$(INSTALLER_OUTPUT_DIR)/$(APP_NAME)-$(JPACKAGE_VERSION).dmg" "$(MACOS_DMG_PATH)"
 
-package-macos-dmg-from-signed-app: check-macos-arm64 check-jpackage ## Create the release DMG from the already signed app without rebuilding it
-	@test -d "$(MACOS_APP_PATH)" || { echo "Missing signed app bundle: $(MACOS_APP_PATH). Run 'make package-macos-app' and 'make sign-macos-app' first."; exit 1; }
+package-macos-dmg-from-signed-app: check-macos-arm64 ## Create the release DMG from the already signed app without rebuilding it
+	@test -d "$(MACOS_APP_PATH)" || { echo "Signed macOS app is missing or invalid. Refusing to create a DMG."; exit 1; }
 	@$(MAKE) validate-macos-postprocessed-packaged-app
-	@packaging/macos/scripts/verify-signatures.sh "$(MACOS_APP_PATH)" >/dev/null 2>&1 || { echo "Refusing to create DMG because the app is not signed with valid release signatures."; exit 1; }
-	@rm -f "$(MACOS_DMG_PATH)"
-	@mkdir -p "$(INSTALLER_OUTPUT_DIR)"
-	jpackage \
-		--type dmg \
-		--dest "$(INSTALLER_OUTPUT_DIR)" \
-		--app-image "$(MACOS_APP_PATH)" \
-		--name "$(APP_NAME)" \
-		--app-version "$(JPACKAGE_VERSION)" \
-		--vendor "cnoupoue" \
-		--mac-package-identifier "$(APP_ID)"
-	@mv "$(INSTALLER_OUTPUT_DIR)/$(APP_NAME)-$(JPACKAGE_VERSION).dmg" "$(MACOS_DMG_PATH)"
+	@MACOS_ENTITLEMENTS_PATH="$(MACOS_ENTITLEMENTS_PATH)" packaging/macos/scripts/verify-signatures.sh "$(MACOS_APP_PATH)" >/dev/null 2>&1 || { echo "Signed macOS app is missing or invalid. Refusing to create a DMG."; exit 1; }
+	@packaging/macos/scripts/create-dmg.sh "$(MACOS_APP_PATH)" "$(MACOS_DMG_PATH)" "$(APP_NAME)"
 
 sign-macos-dmg: check-macos ## Sign the existing DMG with Developer ID
 	@test -f "$(MACOS_DMG_PATH)" || { echo "Missing DMG: $(MACOS_DMG_PATH). Run 'make package-macos-dmg-from-signed-app' first."; exit 1; }
@@ -311,7 +296,8 @@ sign-macos-dmg: check-macos ## Sign the existing DMG with Developer ID
 
 verify-macos-dmg-signatures: check-macos ## Mount the DMG and verify the app inside before notarization
 	@test -f "$(MACOS_DMG_PATH)" || { echo "Missing signed DMG: $(MACOS_DMG_PATH). Run 'make sign-macos-dmg' first."; exit 1; }
-	@packaging/macos/scripts/verify-dmg-signatures.sh "$(MACOS_DMG_PATH)"
+	@test -d "$(MACOS_APP_PATH)" || { echo "Missing source signed app bundle: $(MACOS_APP_PATH)."; exit 1; }
+	@MACOS_ENTITLEMENTS_PATH="$(MACOS_ENTITLEMENTS_PATH)" packaging/macos/scripts/verify-dmg-signatures.sh "$(MACOS_DMG_PATH)" "$(MACOS_APP_PATH)"
 
 notarize-macos-dmg: check-macos ## Submit the already signed DMG and wait for Apple notarization acceptance
 	@test -f "$(MACOS_DMG_PATH)" || { echo "Missing signed DMG: $(MACOS_DMG_PATH). Run 'make sign-macos-dmg' first."; exit 1; }
@@ -376,37 +362,6 @@ test-macos-release-pipeline: ## Run shell tests for macOS signing, notarization,
 
 clean-packaging: ## Remove generated packaging artifacts only
 	rm -rf "$(DIST_DIR)"
-
-tag: ## Create a verified annotated release tag locally; requires VERSION=MAJOR.MINOR.PATCH
-	@test -n "$(VERSION)" || { echo "VERSION is required. Example: make tag VERSION=0.1.0"; exit 1; }
-	@printf '%s\n' "$(VERSION)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$' || { echo "VERSION must be stable semantic version MAJOR.MINOR.PATCH without a leading v or suffix. Example: 0.1.0"; exit 1; }
-	@test -z "$$(git status --porcelain)" || { echo "Refusing to tag because the Git working tree is not clean."; exit 1; }
-	@test "$$(git rev-parse --abbrev-ref HEAD)" = "main" || { echo "Refusing to tag because the current branch is not main."; exit 1; }
-	@git fetch origin main --tags
-	@test "$$(git rev-parse HEAD)" = "$$(git rev-parse origin/main)" || { echo "Refusing to tag because HEAD is not synchronized with origin/main."; exit 1; }
-	@if git rev-parse -q --verify "refs/tags/v$(VERSION)" >/dev/null; then \
-		echo "Refusing to tag because v$(VERSION) already exists locally."; \
-		exit 1; \
-	fi
-	@if git ls-remote --exit-code --tags origin "refs/tags/v$(VERSION)" >/dev/null 2>&1; then \
-		echo "Refusing to tag because v$(VERSION) already exists on origin."; \
-		exit 1; \
-	fi
-	@project_version="$$(sed -n '/<artifactId>$(ARTIFACT_ID)<\/artifactId>/,/<\/version>/ s:.*<version>\(.*\)</version>.*:\1:p' pom.xml | head -n 1)"; \
-	if [ "$$project_version" != "$(VERSION)" ] && [ "$$project_version" != "$(VERSION)-SNAPSHOT" ]; then \
-		echo "Refusing to tag because Maven project version $$project_version does not match $(VERSION) or $(VERSION)-SNAPSHOT."; \
-		exit 1; \
-	fi
-	$(MAKE) verify
-	git tag -a "v$(VERSION)" -m "$(APP_NAME) v$(VERSION)"
-	@printf '\nTag created locally: v$(VERSION)\n\nTo trigger the GitHub release pipeline, review the tag and run:\n\ngit push origin v$(VERSION)\n'
-
-push-tag: ## Push an existing local release tag; requires VERSION=MAJOR.MINOR.PATCH
-	@test -n "$(VERSION)" || { echo "VERSION is required. Example: make push-tag VERSION=0.1.0"; exit 1; }
-	@printf '%s\n' "$(VERSION)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$' || { echo "VERSION must be stable semantic version MAJOR.MINOR.PATCH without a leading v or suffix. Example: 0.1.0"; exit 1; }
-	@git rev-parse -q --verify "refs/tags/v$(VERSION)" >/dev/null || { echo "Local tag v$(VERSION) does not exist. Run 'make tag VERSION=$(VERSION)' first."; exit 1; }
-	@printf 'This will trigger the macOS GitHub Release workflow for v$(VERSION).\n'
-	git push origin "v$(VERSION)"
 
 verify: ## Run all formatting checks, linting, tests, and builds
 	$(MAKE) format-check

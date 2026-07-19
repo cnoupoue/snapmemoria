@@ -3,6 +3,7 @@ package be.cnoupoue.memoriavault.indexing;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -62,8 +63,8 @@ class MemorySourceScannerTest {
 
     ScanProgress result = scanner.scan(source.getId(), progressEvents::add);
 
-    verify(memoryIndexPersistence).deleteBySourceId(source.getId());
-    verify(memoryIndexPersistence).saveBatch(batchCaptor.capture());
+    verify(memoryIndexPersistence)
+        .synchronizeSourceMemories(eq(source.getId()), batchCaptor.capture());
 
     assertThat(batchCaptor.getValue()).hasSize(2);
     assertThat(batchCaptor.getValue())
@@ -104,6 +105,7 @@ class MemorySourceScannerTest {
         .isInstanceOf(SourceUnavailableDuringScanException.class);
 
     verify(memoryIndexPersistence, never()).deleteBySourceId(source.getId());
+    verify(memoryIndexPersistence, never()).synchronizeSourceMemories(any(), any());
     verify(memorySourceRepository, never()).save(any(MemorySource.class));
     assertThat(source.getLastScanStatus()).isEqualTo("NOT_SCANNED");
   }

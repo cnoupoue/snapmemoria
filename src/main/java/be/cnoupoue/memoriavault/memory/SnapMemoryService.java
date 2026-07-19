@@ -1,8 +1,11 @@
 package be.cnoupoue.memoriavault.memory;
 
 import be.cnoupoue.memoriavault.memory.api.*;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -19,9 +22,16 @@ public class SnapMemoryService {
   private static final int MAX_PAGE_SIZE = 100;
 
   private final SnapMemoryRepository snapMemoryRepository;
+  private final Clock clock;
 
+  @Autowired
   public SnapMemoryService(SnapMemoryRepository snapMemoryRepository) {
+    this(snapMemoryRepository, Clock.systemUTC());
+  }
+
+  SnapMemoryService(SnapMemoryRepository snapMemoryRepository, Clock clock) {
     this.snapMemoryRepository = snapMemoryRepository;
+    this.clock = clock;
   }
 
   public MemoryPageResponse findAll(Integer year, Integer month, int page, int size) {
@@ -46,6 +56,30 @@ public class SnapMemoryService {
       memoryPage = snapMemoryRepository.findByCapturedAtStartingWith(capturedAtPrefix, pageRequest);
     }
 
+    List<MemoryResponse> content = memoryPage.getContent().stream().map(this::toResponse).toList();
+
+    return new MemoryPageResponse(
+        content,
+        memoryPage.getNumber(),
+        memoryPage.getSize(),
+        memoryPage.getTotalElements(),
+        memoryPage.getTotalPages());
+  }
+
+  public MemoryPageResponse findFavorites(int page, int size) {
+    int validatedPage = Math.max(page, 0);
+    int validatedSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
+
+    PageRequest pageRequest =
+        PageRequest.of(
+            validatedPage,
+            validatedSize,
+            Sort.by(
+                Sort.Order.desc("capturedAt"),
+                Sort.Order.desc("lastModifiedAt"),
+                Sort.Order.desc("createdAt")));
+
+    Page<SnapMemory> memoryPage = snapMemoryRepository.findFavorites(pageRequest);
     List<MemoryResponse> content = memoryPage.getContent().stream().map(this::toResponse).toList();
 
     return new MemoryPageResponse(
@@ -100,7 +134,31 @@ public class SnapMemoryService {
         "/api/memories/%s/media".formatted(memory.getId()),
         memory.getOverlayPath() == null
             ? null
-            : "/api/memories/%s/overlay".formatted(memory.getId()));
+            : "/api/memories/%s/overlay".formatted(memory.getId()),
+        memory.isFavorite(),
+        memory.getFavoritedAt());
+  }
+
+  @Transactional
+  public MemoryResponse addFavorite(String memoryId) {
+    SnapMemory memory = findMemoryOrThrow(memoryId);
+    memory.markFavorite(Instant.now(clock).toString());
+
+    return toResponse(memory);
+  }
+
+  @Transactional
+  public MemoryResponse removeFavorite(String memoryId) {
+    SnapMemory memory = findMemoryOrThrow(memoryId);
+    memory.removeFavorite(Instant.now(clock).toString());
+
+    return toResponse(memory);
+  }
+
+  private SnapMemory findMemoryOrThrow(String memoryId) {
+    return snapMemoryRepository
+        .findById(memoryId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Memory not found."));
   }
 
   private void validateDateFilter(Integer year, Integer month) {
@@ -139,7 +197,9 @@ public class SnapMemoryService {
         memory.getOverlayPath() != null,
         memory.getFileSizeBytes(),
         memory.getLastModifiedAt(),
-        thumbnailUrl);
+        thumbnailUrl,
+        memory.isFavorite(),
+        memory.getFavoritedAt());
   }
 
   private FlashbackMemoryResponse toFlashbackResponse(SnapMemory memory, int currentYear) {

@@ -1,486 +1,122 @@
 # Memoria Vault
 
-> A private local archive viewer for compatible exported memories.
+A local-first app to browse and rediscover exported Snapchat Memories.
 
-Memoria Vault helps you browse compatible exported memories locally without manually navigating thousands of files on an external drive.
+Memoria Vault indexes compatible exported photos, videos, and overlays on your computer so you can
+explore them by year, month, flashback date, and favorites without uploading your media elsewhere.
 
-It indexes your exported photos, videos, and overlays locally, then provides a faster way to explore them by year, month, and flashback date.
+## Why
+
+Snapchat Memories are personal. If you export them, you should be able to browse them easily without
+renaming files, moving media around, or sending a private archive to a cloud service.
 
 ## Features
 
-* Browse Memories by year and month
-* View photos and videos in a full-screen viewer
-* Display supported overlays without modifying original files
-* Generate cached thumbnails for images and videos
-* Rediscover Memories through “On this day” flashbacks
-* Manage multiple export sources from the Settings page
-* Scan large folders in the background with live progress
-* Keep original files on your USB drive or local folder
-* Store only metadata, indexes, and thumbnail cache locally
+- Browse exported memories by year and month
+- Rediscover memories through flashbacks
+- Mark memories as favorites and find them later
+- Back up and restore favorites locally
+- Move through memories with previous/next buttons and arrow keys in the viewer
+- Play and pause video memories with the Space bar
+- Preview images and videos locally
+- Display supported overlays without modifying original files
+- Keep original files untouched in their existing folder
+- macOS Apple Silicon release available
+- Windows version in progress, with community contributions welcome
 
-## Privacy first
+## Getting Started
 
-Memoria Vault is designed to be local-first.
+Before using Memoria Vault, export your Snapchat data and unzip the downloaded archive.
 
-* Your original exported files stay where they are.
-* Your media is not uploaded to a cloud service.
-* Choosing a folder only gives Memoria Vault the local folder path; it does not upload, copy, move, or duplicate your media.
-* The application runs on your computer by default.
-* Local paths, SQLite databases, thumbnails, and personal exports should never be committed to Git.
+Then select the folder that contains your exported memories.
 
-## Independence disclaimer
+1. Download Memoria Vault from [GitHub Releases](https://github.com/cnoupoue/memoriavault/releases).
+2. Open the app.
+3. Go to **Settings**.
+4. Choose the unzipped export folder.
+5. Start a scan.
+6. Browse your memories locally.
 
-This application is an independent, open-source local tool and is not affiliated, associated, authorized, endorsed by, or in any way officially connected with Snap Inc. or Snapchat.
+If your export contains multiple folders such as `memories`, `memories 2`, and `memories 3`, select
+their parent export folder.
 
-Memoria Vault can read supported local export structures, including compatible Snapchat export formats. All compatibility references are descriptive only.
+## Platform Support
 
-Maintainer note: this rebrand reduces perceived affiliation risk, but it does not replace trademark clearance or legal advice. Public launch should include an independent trademark search for the final app name and legal review. Compatibility references must remain descriptive and non-prominent, and no Snap Inc. or Snapchat logos, branding, or visual identity should be used.
+- macOS Apple Silicon: available
+- Windows: in progress
 
-## Beta issue reports
+## Privacy
 
-When reporting an issue, use **Settings → Copy diagnostic information** and include the copied report. Do not share personal archive paths, filenames, photos, or videos.
+- Your original exported files stay where they are.
+- Memoria Vault stores local metadata, indexes, and thumbnails only on your computer.
+- Your media is not uploaded, synced, or shared by the app.
+- Local paths, SQLite databases, thumbnails, and personal exports should never be committed to Git.
 
-## Getting started
+## Development
 
-### Requirements
+### Prerequisites
 
-* Java 21 or later
-* Node.js 22 or later
-* npm
-* FFmpeg for video thumbnails during development
-* Git
-* Make
+- Java 21
+- Node.js 22
+- npm
+- Maven
+- Make
+- FFmpeg, for video thumbnails during development
 
-On macOS, you can install FFmpeg with:
-
-```bash
-brew install ffmpeg
-```
-On Windows, you can install FFmpeg via Scoop or Chocolatey:
-
-```powershell
-scoop install ffmpeg
-# or using Chocolatey
-choco install ffmpeg
-```
-
-Verify the installation:
+### Commands
 
 ```bash
-ffmpeg -version
-```
-
-Video playback does not depend on FFmpeg. If FFmpeg is unavailable, Memoria Vault continues to browse and open original videos, but video preview thumbnails are shown with a fallback state. Development can use FFmpeg from the system `PATH` or an explicit absolute `memoriavault.ffmpeg.path` value. A plain command name such as `ffmpeg` is treated only as a system `PATH` fallback, so packaged macOS builds still prefer the bundled FFmpeg binary.
-
-### Clone and install
-
-```bash
-git clone https://github.com/cnoupoue/memoriavault.git
-cd memoriavault
-make install
-```
-
-### Start the application
-
-```bash
-make dev
-```
-On Windows (using PowerShell):
-
-Run the backend and frontend in separate terminals:
-
-```powershell
-# Terminal 1: Backend
-.\mvnw.cmd spring-boot:run
-
-# Terminal 2: Frontend
-cd frontend
-npm run dev
-```
-
-This starts:
-
-```text
-Backend:  http://127.0.0.1:8080
-Frontend: http://localhost:5173
-```
-
-Open the frontend in your browser:
-
-```text
-http://localhost:5173
-```
-
-### Run services separately
-
-Start only the backend:
-
-```bash
-make run-backend
-```
-
-Start only the frontend:
-
-```bash
-make run-frontend
-```
-
-Check that the backend is running:
-
-```bash
-make health
-```
-
-### Add an exported archive
-
-1. Open **Settings** in the application.
-2. Click **Choose exported archive folder**.
-3. Select the parent folder containing your exported archive data, such as:
-
-```text
-exported-archive/
-├── memories/
-├── memories 2/
-├── memories 3/
-└── ...
-```
-
-4. Start a scan.
-5. Browse your archive through the timeline.
-
-Do not select an individual `memories` folder when your export contains multiple folders. Select the parent exported archive folder instead. Compatible Snapchat export folder structures are supported descriptively.
-
-The folder picker is local to the machine running Memoria Vault. It indexes files in place and never uploads or copies your personal media. If native folder selection is unavailable, for example in a headless environment, enter the folder path manually in Settings.
-
-## Local commands
-
-Memoria Vault provides a `Makefile` for common development tasks.
-
-```bash
-# Show every available command
-make help
-
-# Install root tooling and frontend dependencies
+# Install dependencies
 make install
 
-# Start backend and frontend together
+# Start the local development app
 make dev
 
-# Start only the Spring Boot backend
-make run-backend
-
-# Start only the React frontend
-make run-frontend
-
-# Format Java and frontend code automatically
-make format
-
-# Check formatting without changing files
-make format-check
-
-# Run frontend linting
-make lint
-
-# Automatically fix lint issues where possible
-make lint-fix
-
-# Run backend and frontend tests
-make test
-
-# Build separate backend and frontend development artifacts
-make build
+# Run formatting checks, linting, tests, and builds
+make verify
 
 # Build the standalone production JAR
 make build-production
 
-# Create a verified local release tag
-make tag VERSION=0.1.0
-
-# Push an existing release tag and trigger the release workflow
-make push-tag VERSION=0.1.0
-
-# Run the standalone production JAR
+# Run the production JAR locally
 make run-production
 
-# Run all formatting checks, linting, tests, and builds
-make verify
-
-# Remove generated build artifacts
-make clean
-```
-
-## Development
-
-Run all local quality checks before opening a pull request:
-
-On MacOS:
-```bash
-make verify
-```
-
-On Windows:
-
-```PowerShell
-powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/scripts/package-windows.ps1
-```
-
-Production mode embeds the compiled React frontend in the Spring Boot JAR, serves the app from http://127.0.0.1:8080, and does not require Vite or Node.js at runtime. This JAR is the foundation for future macOS and Windows native packaging with jpackage.
-
-This validates:
-
-* Java formatting with Spotless and Google Java Format
-* Frontend formatting with Prettier
-* ESLint checks
-* Backend tests
-* Frontend tests
-* Backend build
-* Frontend production build
-
-## Production build
-
-Build the standalone production JAR:
-
-```bash
-make build-production
-```
-
-Run it locally:
-
-```bash
-make run-production
-```
-
-Production mode embeds the compiled React frontend in the Spring Boot JAR, serves the app from `http://127.0.0.1:8080`, and does not require Vite or Node.js at runtime. `make run-production` starts Memoria Vault locally and opens the default browser automatically. If Memoria Vault is already running, the existing local app is opened instead.
-
-This JAR is the foundation for future macOS packaging with `jpackage`.
-
-Windows packaging
-Maintainers can build the standalone Windows executable bundle using the automated PowerShell script. This script automatically handles downloading the official stable FFmpeg binary for Windows, builds the production Maven artifact, and stages all resources.
-
-Run the packaging script from the repository root:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/scripts/package-windows.ps1
-```
-
-This prepares the distribution folder:
-
-```Plaintext
-dist/jpackage-input/
-├── memoria-vault-<version>.jar
-└── ffmpeg/ffmpeg.exe
-```
-Unlike the macOS release pipeline, Windows code-signing is disabled by default for this project. Once the input staging completes, you can build an unsigned standalone executable installer (.exe) by executing the jpackage command generated at the end of the script:
-
-```powershell
-jpackage --type exe --dest "dist\installers" --name "Memoria Vault" --app-version 0.1.2 --vendor "cnoupoue" --input "dist\jpackage-input" --main-jar "memoria-vault-0.1.2-beta.8.jar" --main-class "org.springframework.boot.loader.launch.JarLauncher" --icon "packaging\windows\icon\MemoriaVault.ico" --win-shortcut --win-menu --jlink-options "--strip-debug --no-man-pages --no-header-files --compress zip-6"
-```
-
-The resulting installer will be available under dist/installers/.
-
-If you need to extract and inspect or repack embedded native libraries (such as the SQLite native DLLs packaged inside the sqlite-jdbc JAR) without signing them, use the helper script:
-
-```PowerShell
-powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/scripts/sign-sqlite-native-libs.ps1 -AppPath "dist\jpackage-input\memoria-vault-<version>.jar"
-```
-
-## macOS packaging
-
-Maintainers can build the first Apple Silicon package with:
-
-```bash
+# Build an unsigned local macOS package
 make package-macos
-```
 
-This creates:
-
-```text
-dist/app/Memoria Vault.app
-dist/installers/Memoria-Vault-<version>-macos-arm64.dmg
-```
-
-The package includes a bundled Java runtime, the production JAR with the React frontend embedded, and a verified macOS arm64 FFmpeg binary when present at `packaging/macos/ffmpeg/arm64/ffmpeg`. FFmpeg is used only for video thumbnail generation; original videos still open if preview generation is unavailable.
-
-Before public distribution, maintainers must verify the FFmpeg source, architecture, checksum, license configuration, and third-party notices. The packaging flow intentionally does not download FFmpeg automatically:
-
-```bash
-make check-bundled-ffmpeg
-```
-
-`make package-macos` is an unsigned development packaging path. macOS may show a security warning for unsigned local builds, and this target is not used to publish releases.
-
-For signed releases, the app and DMG stages are separate so the signed app is not rebuilt before DMG creation:
-
-```text
-package-macos-app
-postprocess-macos-sqlite-native-libs
-sign-macos-app
-verify-macos-signatures
-package-macos-dmg-from-signed-app
-sign-macos-dmg
-verify-macos-dmg-signatures
-notarize-macos-dmg
-staple-macos-dmg
-verify-macos-notarization
-package-macos-release
-```
-
-Release order is: build the production JAR, build the unsigned app image, sign native SQLite libraries embedded inside the packaged `sqlite-jdbc` dependency JAR, sign nested Mach-O code from inside out, sign FFmpeg explicitly, sign Java runtime native code where needed, sign the final app bundle, verify Developer ID metadata, create the DMG from the signed app, sign the DMG, mount the DMG and verify the app inside, notarize, staple, validate, generate the checksum, then publish.
-
-Inspect every embedded Mach-O binary in the app bundle:
-
-```bash
-make package-macos-app
-make inspect-macos-signing-readiness
-```
-
-Inspection mode lists the jpackage launcher, bundled FFmpeg, Java runtime binaries, native libraries, frameworks, dynamic dependencies, and current signature status. It exits successfully for unsigned development builds while clearly warning about binaries that still need signing.
-
-Strict release verification is separate:
-
-```bash
-make verify-macos-signatures
-```
-
-`verify-macos-signatures` is intended for signed Developer ID builds. It rejects unsigned or invalid nested binaries, ad-hoc signatures, missing Developer ID authority, missing secure timestamps, missing Hardened Runtime flags, unsafe Homebrew or user-local dynamic dependencies, Team Identifier mismatches, unsigned SQLite native libraries embedded inside the packaged `sqlite-jdbc` JAR, and invalid final `.app` bundle metadata.
-
-Local signing smoke test:
-
-```bash
+# Remove generated packaging artifacts
 make clean-packaging
-make package-macos-app
-APPLE_DEVELOPER_ID_APPLICATION="Developer ID Application: Example Name (TEAMID)" \
-APPLE_TEAM_ID="TEAMID" \
-  make postprocess-macos-sqlite-native-libs
-APPLE_DEVELOPER_ID_APPLICATION="Developer ID Application: Example Name (TEAMID)" \
-  make sign-macos-app
-make verify-macos-signatures
-make package-macos-dmg-from-signed-app
-APPLE_DEVELOPER_ID_APPLICATION="Developer ID Application: Example Name (TEAMID)" \
-  make sign-macos-dmg
 ```
 
-Optional local notarization:
+After `make dev`, open `http://localhost:5173` in your browser.
 
-```bash
-APPLE_ID="account@example.invalid" \
-APPLE_TEAM_ID="TEAMID" \
-APPLE_APP_SPECIFIC_PASSWORD="xxx" \
-make notarize-macos-dmg
-make staple-macos-dmg
-make verify-macos-notarization
-```
+For macOS release signing, notarization, DMG packaging, entitlements, and Apple-specific release
+details, see [packaging/macos/README.md](packaging/macos/README.md).
 
-The macOS package identifier is `be.cnoupoue.memoriavault`. Maintainers should treat upgrades from pre-release builds as a compatibility check before distribution.
+## Documentation
 
-## Creating a macOS release
+- [Technical contribution guide](docs/technical-contribution-guide.md)
+- [Contributing guide](docs/CONTRIBUTING.md)
+- [Security policy](docs/SECURITY.md)
+- [macOS release documentation](packaging/macos/README.md)
+- [Windows packaging notes](packaging/windows/README.md)
 
-Maintainers can create a macOS Apple Silicon release after all checks and manual packaging tests pass.
-
-```bash
-make tag VERSION=0.1.0
-git push origin v0.1.0
-```
-
-`make tag` validates the version format, requires a clean `main` worktree synchronized with `origin/main`, checks for an existing local or remote tag, verifies that the Maven project version matches the release version or the matching `-SNAPSHOT` development version, runs `make verify`, and creates an annotated local tag.
-
-Pushing the tag triggers GitHub Actions, which builds the macOS Apple Silicon DMG, signs it with Developer ID, notarizes it with Apple, staples and validates it, then creates or updates the GitHub Release assets. The release page includes:
-
-```text
-Memoria-Vault-0.1.0-macos-arm64.dmg
-Memoria-Vault-0.1.0-macos-arm64.dmg.sha256
-```
-
-The release workflow requires these GitHub secrets by name:
-
-```text
-APPLE_DEVELOPER_ID_APPLICATION
-APPLE_CERTIFICATE_P12_BASE64
-APPLE_CERTIFICATE_PASSWORD
-APPLE_ID
-APPLE_TEAM_ID
-APPLE_APP_SPECIFIC_PASSWORD
-```
-
-It also requires a valid bundled FFmpeg binary and complete provenance metadata, macOS arm64 packaging compatibility on the GitHub Actions runner, and Java 21 plus Node.js 22 dependency installation through the lockfiles.
-
-If Apple notarization fails, the workflow retrieves the Apple notarization log automatically and uploads the safe diagnostics under the `memoria-vault-macos-notarization-<tag>` artifact. No release asset is published when notarization fails.
-
-The package is Apple Silicon only.
-
-To publish with the optional helper instead of typing the push command directly:
-
-```bash
-make push-tag VERSION=0.1.0
-```
-
-This only pushes an existing local tag; it does not create one.
-
-### Testing release tag creation without publishing
-
-Do not create or push a real release tag during implementation tests. For a local dry run after the working tree is clean, use a version that matches the Maven project version and delete the local tag afterward:
-
-```bash
-make format
-make verify
-make tag VERSION=0.1.0
-git tag -d v0.1.0
-```
-
-Only `git push origin v0.1.0` publishes the tag and starts the GitHub Release workflow.
-
-Format the complete project:
-
-```bash
-make format
-```
-
-Automatically fix supported lint and formatting issues:
-
-```bash
-npm run fix
-```
-
-The backend is built with Java 21 compatibility. If you have several JDKs installed, ensure that `JAVA_HOME` points to Java 21 or a compatible later version.
-
-For technical architecture, development workflow, testing, and contribution guidance, see:
-
-* [Technical contribution guide](docs/technical-contribution-guide.md)
-* [Contributing guide](docs/CONTRIBUTING.md)
-
-## Security
-
-Please report security issues privately.
-
-See [SECURITY.md](docs/SECURITY.md) for the security policy and reporting guidance.
-
-## Support the project
+## Support
 
 Memoria Vault is built as an open-source project.
 
 If it helps you rediscover meaningful memories, consider supporting its development:
 
-[☕ Buy me a coffee](https://buymeacoffee.com/cnoupoue)
+[Buy me a coffee](https://buymeacoffee.com/cnoupoue)
 
-You can also support the project by:
+You can also support the project by starring the repository, opening issues, or contributing code,
+tests, and documentation.
 
-* Starring the repository
-* Sharing it with people who use compatible local archive exports
-* Opening an issue for bugs or ideas
-* Contributing code, tests, or documentation
+## Disclaimer
 
-## Roadmap
+Memoria Vault is an independent project and is not affiliated with Snap Inc. or Snapchat.
 
-Planned improvements include:
-
-* Favorites and collections
-* Advanced filters for photos, videos, overlays, and dates
-* Previous and next navigation in the viewer
-* Better source availability detection
-* Thumbnail cache invalidation
-* Backup and restore for the local index
-* Desktop packaging for macOS and Windows
-* Optional local network deployment with authentication
+Compatibility references are descriptive only.
 
 ## License
 

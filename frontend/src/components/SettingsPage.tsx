@@ -1,4 +1,5 @@
 import {
+  type ChangeEvent,
   type FormEvent,
   useCallback,
   useEffect,
@@ -8,16 +9,21 @@ import {
 import {
   createMemorySource,
   deleteMemorySource,
+  exportMemorySourceFavoritesBackup,
   getDiagnostics,
   getLatestMemorySourceScan,
   getMemoryScanJob,
   getMemorySourceAvailability,
   getMemorySources,
+  previewMemorySourceFavoritesRestore,
+  restoreMemorySourceFavoritesBackup,
   selectMemorySourceFolder,
   MemoriaVaultApiError,
   startMemorySourceScan,
 } from '../api/memoriaVaultApi';
 import type {
+  FavoritesBackup,
+  FavoritesRestoreSummary,
   MemorySource,
   MemoryScanJob,
   Diagnostics,
@@ -82,6 +88,53 @@ function getSourceStateLabel(
   }
 
   return getAvailabilityLabel(source.availabilityStatus);
+}
+
+function downloadFavoritesBackup(source: MemorySource, backup: unknown) {
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {
+    type: 'application/json',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = `memoria-vault-favorites-backup-${source.id}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function validateFavoritesBackup(value: unknown): FavoritesBackup {
+  if (!isRecord(value)) {
+    throw new Error('The selected file is not a favorites backup.');
+  }
+
+  if (value.version !== 1) {
+    throw new Error('Only version 1 favorites backups can be imported.');
+  }
+
+  if (!Array.isArray(value.favorites)) {
+    throw new Error('The favorites backup must include a favorites array.');
+  }
+
+  for (const favorite of value.favorites) {
+    if (
+      !isRecord(favorite) ||
+      typeof favorite.externalMemoryId !== 'string' ||
+      !favorite.externalMemoryId ||
+      typeof favorite.mainPath !== 'string' ||
+      !favorite.mainPath
+    ) {
+      throw new Error('The favorites backup has missing required fields.');
+    }
+  }
+
+  return value as FavoritesBackup;
 }
 
 function getVideoPreviewStatus(diagnostics: Diagnostics): string {
@@ -221,6 +274,19 @@ export function SettingsPage({
   );
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [scanJob, setScanJob] = useState<MemoryScanJob | null>(null);
+  const [pendingRescanSource, setPendingRescanSource] =
+    useState<MemorySource | null>(null);
+  const [isBackingUpFavorites, setIsBackingUpFavorites] = useState(false);
+  const [importSource, setImportSource] = useState<MemorySource | null>(null);
+  const [restorePreview, setRestorePreview] = useState<{
+    source: MemorySource;
+    backup: FavoritesBackup;
+    summary: FavoritesRestoreSummary;
+  } | null>(null);
+  const [restoreSummary, setRestoreSummary] =
+    useState<FavoritesRestoreSummary | null>(null);
+  const [isPreviewingRestore, setIsPreviewingRestore] = useState(false);
+  const [isRestoringFavorites, setIsRestoringFavorites] = useState(false);
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [isDiagnosticsLoading, setIsDiagnosticsLoading] = useState(true);
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
@@ -230,6 +296,7 @@ export function SettingsPage({
 
   const pollingIntervalRef = useRef<number | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const favoritesImportInputRef = useRef<HTMLInputElement | null>(null);
 
   function upsertSource(source: MemorySource) {
     setSources((currentSources) => {
@@ -527,6 +594,17 @@ export function SettingsPage({
   }
 
   async function handleScan(source: MemorySource) {
+    if (source.favoriteCount > 0) {
+      setPendingRescanSource(source);
+      setError(null);
+      setSuccessMessage(null);
+      return;
+    }
+
+    await startScan(source);
+  }
+
+  async function startScan(source: MemorySource) {
     setError(null);
     setSuccessMessage(null);
     setScanJob(null);
@@ -542,6 +620,96 @@ export function SettingsPage({
           ? scanError.message
           : 'Could not start this scan. A scan may already be running for this source.',
       );
+    }
+  }
+
+  async function handleBackupFavorites(source: MemorySource) {
+    setIsBackingUpFavorites(true);
+    setError(null);
+
+    try {
+      const backup = await exportMemorySourceFavoritesBackup(source.id);
+      downloadFavoritesBackup(source, backup);
+      setSuccessMessage('Favorites backup downloaded.');
+    } catch {
+      setError('Could not export favorites backup.');
+    } finally {
+      setIsBackingUpFavorites(false);
+    }
+  }
+
+  function handleChooseFavoritesBackup(source: MemorySource) {
+    setImportSource(source);
+    setError(null);
+    setSuccessMessage(null);
+    setRestoreSummary(null);
+    favoritesImportInputRef.current?.click();
+  }
+
+  async function handleFavoritesBackupSelected(
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0] ?? null;
+    const source = importSource;
+
+    event.target.value = '';
+
+    if (!file || !source) {
+      return;
+    }
+
+    setIsPreviewingRestore(true);
+    setError(null);
+    setSuccessMessage(null);
+    setRestoreSummary(null);
+
+    try {
+      const parsedBackup = validateFavoritesBackup(
+        JSON.parse(await file.text()),
+      );
+      const summary = await previewMemorySourceFavoritesRestore(
+        source.id,
+        parsedBackup,
+      );
+
+      setRestorePreview({ source, backup: parsedBackup, summary });
+    } catch (restoreError) {
+      setRestorePreview(null);
+      setError(
+        restoreError instanceof Error
+          ? restoreError.message
+          : 'Could not read this favorites backup.',
+      );
+    } finally {
+      setIsPreviewingRestore(false);
+      setImportSource(null);
+    }
+  }
+
+  async function handleRestoreFavorites() {
+    if (!restorePreview) {
+      return;
+    }
+
+    setIsRestoringFavorites(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const summary = await restoreMemorySourceFavoritesBackup(
+        restorePreview.source.id,
+        restorePreview.backup,
+      );
+
+      setRestoreSummary(summary);
+      setRestorePreview(null);
+      setSuccessMessage('Favorites restored.');
+      await loadSources();
+      onSourceScanned();
+    } catch {
+      setError('Could not restore favorites from this backup.');
+    } finally {
+      setIsRestoringFavorites(false);
     }
   }
 
@@ -616,6 +784,25 @@ export function SettingsPage({
         </div>
       )}
 
+      {restoreSummary && (
+        <div className="scan-result-banner">
+          <strong>Favorites restore summary</strong>
+          <span>
+            {restoreSummary.restored.toLocaleString()} restored ·{' '}
+            {restoreSummary.alreadyFavorite.toLocaleString()} already favorite ·{' '}
+            {restoreSummary.notFound.toLocaleString()} could not be matched
+          </span>
+        </div>
+      )}
+
+      <input
+        ref={favoritesImportInputRef}
+        accept="application/json,.json"
+        hidden
+        onChange={(event) => void handleFavoritesBackupSelected(event)}
+        type="file"
+      />
+
       {scanJob && (
         <div className="scan-result-banner">
           <strong>
@@ -657,6 +844,104 @@ export function SettingsPage({
               {scanJob.mainVideos.toLocaleString()} videos
             </span>
           )}
+        </div>
+      )}
+
+      {pendingRescanSource && (
+        <div aria-modal="true" className="confirmation-backdrop" role="dialog">
+          <section className="confirmation-dialog">
+            <h3>Rescan source?</h3>
+            <p>
+              Rescanning this source preserves favorites for memories that are
+              still found. Favorites linked to memories that are no longer
+              present may be removed.
+            </p>
+            <p>
+              This source currently has{' '}
+              {pendingRescanSource.favoriteCount.toLocaleString()} favorite
+              {pendingRescanSource.favoriteCount === 1 ? '' : 's'}.
+            </p>
+            <div className="confirmation-actions">
+              <button
+                className="secondary-button"
+                onClick={() => setPendingRescanSource(null)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="secondary-button"
+                disabled={isBackingUpFavorites}
+                onClick={() => void handleBackupFavorites(pendingRescanSource)}
+                type="button"
+              >
+                {isBackingUpFavorites ? 'Backing up…' : 'Back up favorites'}
+              </button>
+              <button
+                className="primary-button"
+                onClick={() => {
+                  const source = pendingRescanSource;
+                  setPendingRescanSource(null);
+                  void startScan(source);
+                }}
+                type="button"
+              >
+                Continue rescan
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {restorePreview && (
+        <div aria-modal="true" className="confirmation-backdrop" role="dialog">
+          <section className="confirmation-dialog">
+            <h3>Import favorites backup?</h3>
+            <p>
+              Backup contains {restorePreview.summary.totalFavorites} favorite
+              {restorePreview.summary.totalFavorites === 1 ? '' : 's'} for{' '}
+              {restorePreview.source.name}.
+            </p>
+            <dl className="restore-preview-list">
+              <div>
+                <dt>Can be restored</dt>
+                <dd>{restorePreview.summary.restorable.toLocaleString()}</dd>
+              </div>
+              <div>
+                <dt>Already favorite</dt>
+                <dd>
+                  {restorePreview.summary.alreadyFavorite.toLocaleString()}
+                </dd>
+              </div>
+              <div>
+                <dt>Not found</dt>
+                <dd>{restorePreview.summary.notFound.toLocaleString()}</dd>
+              </div>
+            </dl>
+            {restorePreview.summary.notFound > 0 && (
+              <p>
+                Some memories no longer exist in this source or could not be
+                matched.
+              </p>
+            )}
+            <div className="confirmation-actions">
+              <button
+                className="secondary-button"
+                onClick={() => setRestorePreview(null)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="primary-button"
+                disabled={isRestoringFavorites}
+                onClick={() => void handleRestoreFavorites()}
+                type="button"
+              >
+                {isRestoringFavorites ? 'Restoring…' : 'Restore Favorites'}
+              </button>
+            </div>
+          </section>
         </div>
       )}
 
@@ -881,6 +1166,10 @@ export function SettingsPage({
                   <div className="source-card-meta">
                     <span>Last scan: {formatDate(source.lastScanAt)}</span>
                     <span>{getStatusLabel(source.lastScanStatus)}</span>
+                    <span>
+                      {source.favoriteCount.toLocaleString()} favorite
+                      {source.favoriteCount === 1 ? '' : 's'}
+                    </span>
                   </div>
 
                   {isUnavailable && (
@@ -897,6 +1186,26 @@ export function SettingsPage({
                       type="button"
                     >
                       {isScanning ? 'Scanning…' : 'Scan source'}
+                    </button>
+
+                    <button
+                      className="secondary-button"
+                      disabled={isBackingUpFavorites || isDeleting}
+                      onClick={() => void handleBackupFavorites(source)}
+                      type="button"
+                    >
+                      Export Favorites
+                    </button>
+
+                    <button
+                      className="secondary-button"
+                      disabled={isPreviewingRestore || isDeleting}
+                      onClick={() => handleChooseFavoritesBackup(source)}
+                      type="button"
+                    >
+                      {isPreviewingRestore && importSource?.id === source.id
+                        ? 'Reading backup…'
+                        : 'Import Favorites Backup'}
                     </button>
 
                     <button

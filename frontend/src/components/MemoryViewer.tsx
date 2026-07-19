@@ -16,14 +16,24 @@ type MemoryViewerProps = {
   memory: MemoryDetail | null;
   isLoading: boolean;
   error: string | null;
+  hasPrevious?: boolean;
+  hasNext?: boolean;
   onClose: () => void;
+  onPrevious?: () => void;
+  onNext?: () => void;
+  onToggleFavorite?: (memoryId: string, nextFavorite: boolean) => void;
 };
 
 export function MemoryViewer({
   memory,
   isLoading,
   error,
+  hasPrevious = false,
+  hasNext = false,
   onClose,
+  onPrevious,
+  onNext,
+  onToggleFavorite,
 }: MemoryViewerProps) {
   const [mediaErrorMemoryId, setMediaErrorMemoryId] = useState<string | null>(
     null,
@@ -41,7 +51,8 @@ export function MemoryViewer({
     isPreparing: false,
     openOriginalStatus: null,
   });
-  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const viewerRef = useRef<HTMLElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const hasMediaError = memory !== null && mediaErrorMemoryId === memory.id;
   const mediaErrorMessage = getPlaybackMessage(mediaErrorCategory);
@@ -56,10 +67,61 @@ export function MemoryViewer({
       ? playbackState.openOriginalStatus
       : null;
 
+  const isOpen = isLoading || error !== null || memory !== null;
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (!isOpen) {
+        return;
+      }
+
       if (event.key === 'Escape') {
         onClose();
+        return;
+      }
+
+      if (isSpaceKey(event)) {
+        if (
+          memory?.mediaType !== 'VIDEO' ||
+          hasMediaError ||
+          shouldIgnoreVideoPlaybackShortcut(event)
+        ) {
+          return;
+        }
+
+        const video = videoRef.current;
+
+        if (!video) {
+          return;
+        }
+
+        event.preventDefault();
+
+        if (video.paused) {
+          void video.play().catch(() => {
+            setMediaErrorMemoryId(memory.id);
+            setMediaErrorCategory('BROWSER_MEDIA_ERROR');
+          });
+        } else {
+          video.pause();
+        }
+
+        return;
+      }
+
+      if (shouldIgnoreMemoryNavigationShortcut(event)) {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft' && hasPrevious) {
+        event.preventDefault();
+        onPrevious?.();
+        return;
+      }
+
+      if (event.key === 'ArrowRight' && hasNext) {
+        event.preventDefault();
+        onNext?.();
       }
     }
 
@@ -68,15 +130,44 @@ export function MemoryViewer({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [onClose]);
-
-  const isOpen = isLoading || error !== null || memory !== null;
+  }, [
+    hasMediaError,
+    hasNext,
+    hasPrevious,
+    isOpen,
+    memory,
+    onClose,
+    onNext,
+    onPrevious,
+  ]);
 
   useEffect(() => {
     if (isOpen) {
-      closeButtonRef.current?.focus();
+      viewerRef.current?.focus();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+
+    return () => {
+      if (!video) {
+        return;
+      }
+
+      const hadLoadedSource = video.currentSrc !== '';
+
+      if (!video.paused) {
+        video.pause();
+      }
+
+      video.removeAttribute('src');
+
+      if (hadLoadedSource) {
+        video.load();
+      }
+    };
+  }, [memory?.id]);
 
   if (!isOpen) {
     return null;
@@ -178,11 +269,12 @@ export function MemoryViewer({
       role="dialog"
     >
       <section
+        ref={viewerRef}
         className="memory-viewer"
         onMouseDown={(event) => event.stopPropagation()}
+        tabIndex={-1}
       >
         <button
-          ref={closeButtonRef}
           aria-label="Close viewer"
           className="memory-viewer-close"
           onClick={onClose}
@@ -190,6 +282,25 @@ export function MemoryViewer({
         >
           Close
         </button>
+
+        {!isLoading && !error && memory && onToggleFavorite && (
+          <button
+            aria-label={
+              memory.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'
+            }
+            aria-pressed={memory.isFavorite}
+            className={`memory-viewer-favorite ${
+              memory.isFavorite ? 'is-favorite' : ''
+            }`}
+            onClick={() => onToggleFavorite(memory.id, !memory.isFavorite)}
+            title={
+              memory.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'
+            }
+            type="button"
+          >
+            <span aria-hidden="true">{memory.isFavorite ? '♥' : '♡'}</span>
+          </button>
+        )}
 
         {isLoading && (
           <div className="memory-viewer-state">Opening memory…</div>
@@ -201,6 +312,28 @@ export function MemoryViewer({
 
         {!isLoading && !error && memory && (
           <>
+            <button
+              aria-label="Previous memory"
+              className="memory-viewer-nav memory-viewer-nav-previous"
+              disabled={!hasPrevious}
+              onClick={onPrevious}
+              type="button"
+            >
+              <span aria-hidden="true">‹</span>
+              <span>Previous</span>
+            </button>
+
+            <button
+              aria-label="Next memory"
+              className="memory-viewer-nav memory-viewer-nav-next"
+              disabled={!hasNext}
+              onClick={onNext}
+              type="button"
+            >
+              <span>Next</span>
+              <span aria-hidden="true">›</span>
+            </button>
+
             <div className="memory-viewer-media">
               {isPreparingPlayback && (
                 <div className="memory-viewer-state">
@@ -236,6 +369,8 @@ export function MemoryViewer({
                 />
               ) : (
                 <video
+                  key={memory.id}
+                  ref={videoRef}
                   autoPlay
                   className="memory-viewer-video"
                   controls
@@ -292,6 +427,51 @@ function shouldAttemptCompatibilityPlayback(category: PlaybackFailureCategory) {
   return (
     category === 'VIDEO_FORMAT_UNSUPPORTED' ||
     category === 'BROWSER_MEDIA_ERROR'
+  );
+}
+
+function isSpaceKey(event: KeyboardEvent) {
+  return (
+    event.key === ' ' || event.key === 'Spacebar' || event.code === 'Space'
+  );
+}
+
+function hasShortcutModifier(event: KeyboardEvent) {
+  return event.metaKey || event.ctrlKey || event.altKey || event.shiftKey;
+}
+
+function shouldIgnoreMemoryNavigationShortcut(event: KeyboardEvent) {
+  if (
+    hasShortcutModifier(event) ||
+    (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')
+  ) {
+    return true;
+  }
+
+  return isEditableShortcutTarget(event.target, false);
+}
+
+function shouldIgnoreVideoPlaybackShortcut(event: KeyboardEvent) {
+  if (hasShortcutModifier(event)) {
+    return true;
+  }
+
+  return isEditableShortcutTarget(event.target, true);
+}
+
+function isEditableShortcutTarget(
+  eventTarget: EventTarget | null,
+  includeButtons: boolean,
+) {
+  const target = eventTarget instanceof HTMLElement ? eventTarget : null;
+
+  return (
+    target?.tagName === 'INPUT' ||
+    target?.tagName === 'TEXTAREA' ||
+    target?.tagName === 'SELECT' ||
+    (includeButtons && target?.tagName === 'BUTTON') ||
+    target?.isContentEditable === true ||
+    target?.getAttribute('contenteditable') === 'true'
   );
 }
 
