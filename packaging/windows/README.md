@@ -20,7 +20,7 @@ Before executing the packaging lifecycle on your local Windows workstation, ensu
 
 1.  **Java 21**: A JDK configuration containing JavaFX modules (e.g., Eclipse Temurin or Azul Zulu).
 2.  **Node.js 22** & **npm**: Required to build the web production assets for the user interface.
-3.  **WiX Toolset v3.11**: Required by `jpackage` to generate executable Windows Installers (`.exe`/`.msi`).
+3.  **WiX Toolset v3.x**: Required by `jpackage` to generate executable Windows Installers (`.exe`/`.msi`).
     *   *Quick Installation via Chocolatey:* `choco install wixtoolset -y`
 
 ---
@@ -92,4 +92,3 @@ The `.github/workflows/release-windows.yml` workflow automates this entire lifec
 ```bash
 sha256sum -c Memoria-Vault-0.1.2-windows-x64.exe.sha256
 ```
-
