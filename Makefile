@@ -136,7 +136,7 @@ build-frontend: ## Build the frontend production bundle
 	npm --prefix frontend run build
 
 build-production: ## Build the standalone production JAR with the React frontend embedded
-	./mvnw -P$(SPRING_PROFILE) -DskipTests package
+	./mvnw clean -P$(SPRING_PROFILE) -DskipTests package
 
 package-jar: build-production ## Alias for creating the final executable production JAR
 
@@ -235,10 +235,13 @@ package-macos-app: build-production clean-macos-app-output prepare-bundled-ffmpe
 		--mac-package-identifier "$(APP_ID)" \
 		--input "$(JPACKAGE_INPUT_DIR)" \
 		--main-jar "$$(basename "$(JAR_PATH)")" \
+		--main-class "org.springframework.boot.loader.launch.JarLauncher" \
+		--java-options '-Dmemoriavault.ffmpeg.path=$$APPDIR/$(BUNDLED_FFMPEG_APP_DIR)/ffmpeg' \
 		--arguments "$(SPRING_ARGS)" \
 		--icon "$(MACOS_ICON)" \
 		--jlink-options "$(JLINK_OPTIONS)"
 	@$(MAKE) validate-macos-pristine-packaged-app
+	@$(MAKE) inspect-bundled-ffmpeg
 
 validate-macos-pristine-packaged-app: check-production-jar ## Verify the freshly packaged app matches the current production JAR exactly
 	@test -d "$(MACOS_APP_PATH)" || { echo "Missing app bundle: $(MACOS_APP_PATH). Run 'make package-macos-app' first."; exit 1; }
@@ -348,6 +351,11 @@ inspect-bundled-ffmpeg: inspect-macos-app ## Verify the generated macOS app cont
 	@test -x "$(BUNDLED_FFMPEG_APP_PATH)" || { echo "Bundled FFmpeg in app is not executable: $(BUNDLED_FFMPEG_APP_PATH)."; exit 1; }
 	@file "$(BUNDLED_FFMPEG_APP_PATH)" | grep -Eq 'arm64' || { echo "Bundled app FFmpeg must support macOS arm64."; exit 1; }
 	@"$(BUNDLED_FFMPEG_APP_PATH)" -version >/dev/null || { echo "Bundled app FFmpeg failed validation: $(BUNDLED_FFMPEG_APP_PATH) -version"; exit 1; }
+	@set -e; \
+	tmp_preview="$$(mktemp "$${TMPDIR:-/tmp}/memoriavault-ffmpeg-preview.XXXXXX.jpg")"; \
+	"$(BUNDLED_FFMPEG_APP_PATH)" -hide_banner -loglevel error -f lavfi -i color=c=black:s=32x32:d=1 -frames:v 1 -vf scale=16:16 -q:v 4 -y "$$tmp_preview" >/dev/null; \
+	test -s "$$tmp_preview" || { echo "Bundled app FFmpeg did not generate a video preview JPEG."; rm -f "$$tmp_preview"; exit 1; }; \
+	rm -f "$$tmp_preview"
 	@otool -L "$(BUNDLED_FFMPEG_APP_PATH)" | grep -Eq '/(opt/homebrew|usr/local)/(Cellar|opt)/' && { echo "Bundled app FFmpeg must not depend on Homebrew dynamic libraries."; exit 1; } || true
 	@echo "macOS app contains executable bundled FFmpeg."
 

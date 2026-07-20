@@ -7,6 +7,16 @@ import be.cnoupoue.memoriavault.platform.common.AbstractPlatformService;
 
 public class WindowsPlatformService extends AbstractPlatformService {
 
+  private final WindowsRuntimePaths runtimePaths;
+
+  public WindowsPlatformService() {
+    this(new WindowsRuntimePaths());
+  }
+
+  WindowsPlatformService(WindowsRuntimePaths runtimePaths) {
+    this.runtimePaths = runtimePaths;
+  }
+
   @Override
   public PlatformType getPlatformType() {
     return PlatformType.WINDOWS;
@@ -14,13 +24,12 @@ public class WindowsPlatformService extends AbstractPlatformService {
 
   @Override
   public PlatformCapabilities getCapabilities() {
-    // Windows supports native folder picker via JFileChooser
-    return new PlatformCapabilities(false, false, true, false);
+    return new PlatformCapabilities(true, true, true, false);
   }
 
   @Override
   protected PlatformRuntimePaths detectRuntimePaths() {
-    return PlatformRuntimePaths.empty();
+    return runtimePaths.detect();
   }
 
   @Override

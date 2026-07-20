@@ -70,6 +70,23 @@ class MacosRuntimePathsTest {
   }
 
   @Test
+  void resolvesJpackageBundlePathsFromBundledJavaHome() throws Exception {
+    Path appBundle = Files.createDirectories(temporaryDirectory.resolve("Java Home Name.app"));
+    Path contents = Files.createDirectories(appBundle.resolve("Contents"));
+    Files.createDirectories(contents.resolve("app"));
+    Path runtimeHome = Files.createDirectories(contents.resolve("runtime/Contents/Home"));
+    Path launcher = executable(contents.resolve("MacOS/Java Home Launcher"));
+
+    PlatformRuntimePaths paths =
+        new MacosRuntimePaths()
+            .detect(Optional.empty(), Optional.empty(), Optional.of(runtimeHome));
+
+    assertThat(paths.applicationBundlePath()).contains(appBundle);
+    assertThat(paths.applicationLauncherPath()).contains(launcher);
+    assertThat(paths.bundledFfmpegPath()).contains(contents.resolve("app/ffmpeg/ffmpeg"));
+  }
+
+  @Test
   void returnsEmptyPathsOutsideJpackageLayout() throws Exception {
     Path classesDirectory = Files.createDirectories(temporaryDirectory.resolve("classes"));
 

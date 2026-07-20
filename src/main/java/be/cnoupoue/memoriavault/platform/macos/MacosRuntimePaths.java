@@ -30,10 +30,16 @@ public class MacosRuntimePaths {
   }
 
   PlatformRuntimePaths detect(Optional<Path> codeSourcePath, Optional<Path> jpackageAppPath) {
+    return detect(codeSourcePath, jpackageAppPath, javaHomePath());
+  }
+
+  PlatformRuntimePaths detect(
+      Optional<Path> codeSourcePath, Optional<Path> jpackageAppPath, Optional<Path> javaHomePath) {
     Optional<Path> contentsDirectory =
         jpackageAppPath
             .flatMap(this::findContentsDirectoryFromLauncher)
-            .or(() -> codeSourcePath.flatMap(this::findJpackageAppDirectory).map(Path::getParent));
+            .or(() -> codeSourcePath.flatMap(this::findJpackageAppDirectory).map(Path::getParent))
+            .or(() -> javaHomePath.flatMap(this::findContentsDirectoryFromJavaHome));
     Optional<Path> appDirectory = contentsDirectory.map(directory -> directory.resolve("app"));
 
     return new PlatformRuntimePaths(
@@ -58,6 +64,15 @@ public class MacosRuntimePaths {
 
   private Optional<Path> jpackageAppPath() {
     String value = System.getProperty(JPACKAGE_APP_PATH_PROPERTY);
+    if (value == null || value.isBlank()) {
+      return Optional.empty();
+    }
+
+    return Optional.of(Path.of(value.trim()).toAbsolutePath().normalize());
+  }
+
+  private Optional<Path> javaHomePath() {
+    String value = System.getProperty("java.home");
     if (value == null || value.isBlank()) {
       return Optional.empty();
     }
@@ -94,6 +109,22 @@ public class MacosRuntimePaths {
           && cursor.getParent() != null
           && "Contents".equals(cursor.getParent().getFileName().toString())) {
         return Optional.of(cursor.toAbsolutePath().normalize());
+      }
+
+      cursor = cursor.getParent();
+    }
+
+    return Optional.empty();
+  }
+
+  private Optional<Path> findContentsDirectoryFromJavaHome(Path javaHomePath) {
+    Path cursor = javaHomePath.toAbsolutePath().normalize();
+
+    while (cursor != null) {
+      if (cursor.getFileName() != null
+          && "Contents".equals(cursor.getFileName().toString())
+          && Files.isDirectory(cursor.resolve("app"))) {
+        return Optional.of(cursor);
       }
 
       cursor = cursor.getParent();

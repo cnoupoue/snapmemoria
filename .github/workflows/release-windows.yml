@@ -156,6 +156,9 @@ jobs:
                    --input "dist/jpackage-input" `
                    --main-jar $jarFile.Name `
                    --main-class "org.springframework.boot.loader.launch.JarLauncher" `
+                   --java-options "-Dmemoriavault.desktop=true" `
+                   --java-options "-Dmemoriavault.browser.auto-open=false" `
+                   --java-options '-Dmemoriavault.ffmpeg.path=$APPDIR\ffmpeg\ffmpeg.exe' `
                    --icon "packaging/windows/icon/MemoriaVault.ico" `
                    --win-shortcut `
                    --win-menu `

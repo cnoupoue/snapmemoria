@@ -64,6 +64,9 @@ jpackage --type exe `
          --input "dist/jpackage-input" `
          --main-jar "memoria-vault-0.1.2.jar" `
          --main-class "org.springframework.boot.loader.launch.JarLauncher" `
+         --java-options "-Dmemoriavault.desktop=true" `
+         --java-options "-Dmemoriavault.browser.auto-open=false" `
+         --java-options '-Dmemoriavault.ffmpeg.path=$APPDIR\ffmpeg\ffmpeg.exe' `
          --icon "packaging/windows/icon/MemoriaVault.ico" `
          --win-shortcut `
          --win-menu `
@@ -89,7 +92,4 @@ The `.github/workflows/release-windows.yml` workflow automates this entire lifec
 ```bash
 sha256sum -c Memoria-Vault-0.1.2-windows-x64.exe.sha256
 ```
-
-
-
 

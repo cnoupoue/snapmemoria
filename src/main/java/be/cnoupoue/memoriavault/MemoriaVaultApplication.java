@@ -1,78 +1,60 @@
 package be.cnoupoue.memoriavault;
 
 import be.cnoupoue.memoriavault.browser.ExistingInstanceStartupListener;
-import javafx.application.Application;
-import javafx.application.Platform;
-import javafx.scene.Scene;
-import javafx.scene.image.Image;
-import javafx.scene.web.WebView;
-import javafx.stage.Stage;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
 
 @SpringBootApplication
-public class MemoriaVaultApplication extends Application {
+public class MemoriaVaultApplication {
 
-  private ConfigurableApplicationContext springContext;
+  static final String DESKTOP_MODE_PROPERTY = "memoriavault.desktop";
+  private static final String DESKTOP_APPLICATION_CLASS =
+      "be.cnoupoue.memoriavault.MemoriaVaultDesktopApplication";
 
-  /** Initializes the Spring Boot context in the background before the JavaFX UI starts. */
-  @Override
-  public void init() {
-    SpringApplication application = new SpringApplication(MemoriaVaultApplication.class);
-    application.addListeners(new ExistingInstanceStartupListener());
+  private MemoriaVaultApplication() {}
 
-    // Explicitly disable headless mode to allow native Windows AWT/JavaFX UI creation
-    application.setHeadless(false);
-
-    // Start the Spring Boot backend server
-    this.springContext = application.run(getParameters().getRaw().toArray(new String[0]));
-  }
-
-  /** Configures and displays the native Windows desktop frame embedding the frontend web layout. */
-  @Override
-  public void start(Stage primaryStage) {
-    WebView webView = new WebView();
-
-    // Fetch the dynamically configured port or fallback to the standard port
-    String port = springContext.getEnvironment().getProperty("server.port", "8080");
-    webView.getEngine().load("http://localhost:" + port);
-
-    // Setup the main interface container scene
-    Scene scene = new Scene(webView, 1200, 800);
-    primaryStage.setScene(scene);
-    primaryStage.setTitle("Memoria Vault");
-
-    // Load the application icon for the Windows taskbar representation
-    try {
-      primaryStage.getIcons().add(new Image(getClass().getResourceAsStream("/icon.png")));
-    } catch (Exception e) {
-      // Fallback silently if the resource stream path slightly differs
-    }
-
-    // Handle graceful application shutdown when the window close button (X) is clicked
-    primaryStage.setOnCloseRequest(
-        event -> {
-          Platform.exit();
-          System.exit(0);
-        });
-
-    primaryStage.show();
-  }
-
-  /** Shuts down the Spring Boot engine cleanly when the JavaFX platform terminates. */
-  @Override
-  public void stop() {
-    if (springContext != null) {
-      springContext.close();
-    }
-    Platform.exit();
-  }
-
-  /**
-   * Main entry point routing execution control directly over to the JavaFX application lifecycle.
-   */
   public static void main(String[] args) {
-    Application.launch(MemoriaVaultApplication.class, args);
+    if (Boolean.getBoolean(DESKTOP_MODE_PROPERTY)) {
+      launchDesktop(args);
+      return;
+    }
+
+    startBackend(args, true, true);
+  }
+
+  static ConfigurableApplicationContext startBackend(
+      String[] args, boolean headless, boolean enableExistingInstanceCheck) {
+    SpringApplication application = new SpringApplication(MemoriaVaultApplication.class);
+    if (enableExistingInstanceCheck) {
+      application.addListeners(new ExistingInstanceStartupListener());
+    }
+    application.setHeadless(headless);
+    return application.run(args);
+  }
+
+  private static void launchDesktop(String[] args) {
+    try {
+      Class<?> desktopApplication = Class.forName(DESKTOP_APPLICATION_CLASS);
+      Method launchDesktop = desktopApplication.getDeclaredMethod("launchDesktop", String[].class);
+      launchDesktop.setAccessible(true);
+      launchDesktop.invoke(null, (Object) args);
+    } catch (ClassNotFoundException exception) {
+      throw new IllegalStateException(
+          "Desktop mode requires building with the windows-desktop Maven profile.", exception);
+    } catch (NoSuchMethodException | IllegalAccessException exception) {
+      throw new IllegalStateException("Desktop mode is not correctly configured.", exception);
+    } catch (InvocationTargetException exception) {
+      Throwable cause = exception.getCause();
+      if (cause instanceof RuntimeException runtimeException) {
+        throw runtimeException;
+      }
+      if (cause instanceof Error error) {
+        throw error;
+      }
+      throw new IllegalStateException("Desktop mode failed to start.", cause);
+    }
   }
 }

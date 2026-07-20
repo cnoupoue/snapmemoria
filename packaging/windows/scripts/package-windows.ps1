@@ -69,7 +69,7 @@ if (-not (Test-Path $ffmpegDest)) {
 # 2. Executing Clean Maven Package
 Write-Host "Compiling production artifact via clean package..."
 # Note: The CI release workflow runs full test validation suites before invoking this script
-& .\mvnw.cmd clean package -Pproduction -DskipTests
+& .\mvnw.cmd clean package -Pproduction,windows-desktop -DskipTests
 if ($LASTEXITCODE -ne 0) { throw "Maven compilation pipeline returned a non-zero exit code." }
 
 # 3. Setting Up Runtime Input Directory For jpackage
@@ -108,5 +108,5 @@ if (-not (Test-Path $envFilePath)) {
 Write-Host ""
 Write-Host "=== READY FOR JPACKAGE EXECUTION ==="
 Write-Host "Execute the following command sequence to produce the installer:"
-Write-Host "jpackage --type exe --dest `"$dist\installers`" --name `"Memoria Vault`" --app-version $Version --vendor `"cnoupoue`" --input `"$jpackageInput`" --main-jar `"$jarName`" --main-class `"org.springframework.boot.loader.launch.JarLauncher`" --icon `"packaging\windows\icon\MemoriaVault.ico`" --win-shortcut --win-menu --jlink-options `"--strip-debug --no-man-pages --no-header-files --compress zip-6`" --verbose"
+Write-Host "jpackage --type exe --dest `"$dist\installers`" --name `"Memoria Vault`" --app-version $Version --vendor `"cnoupoue`" --input `"$jpackageInput`" --main-jar `"$jarName`" --main-class `"org.springframework.boot.loader.launch.JarLauncher`" --java-options `"-Dmemoriavault.desktop=true`" --java-options `"-Dmemoriavault.browser.auto-open=false`" --java-options `"-Dmemoriavault.ffmpeg.path=`$APPDIR\ffmpeg\ffmpeg.exe`" --icon `"packaging\windows\icon\MemoriaVault.ico`" --win-shortcut --win-menu --jlink-options `"--strip-debug --no-man-pages --no-header-files --compress zip-6`" --verbose"
 Write-Host ""
