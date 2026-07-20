@@ -101,13 +101,44 @@ jobs:
       - name: Ensure WiX Toolset is installed
         shell: powershell
         run: |
-          $wixPath = "C:\Program Files (x86)\WiX Toolset v3.11\bin"
-          if (-not (Test-Path $wixPath)) {
+          $ErrorActionPreference = "Stop"
+
+          function Find-WixBin {
+              $command = Get-Command candle.exe -ErrorAction SilentlyContinue
+              if ($command) {
+                  return Split-Path -Parent $command.Source
+              }
+
+              $candidateRoots = @(
+                  "${env:ChocolateyInstall}\lib\wixtoolset\tools",
+                  "C:\ProgramData\chocolatey\lib\wixtoolset\tools",
+                  "C:\Program Files (x86)\WiX Toolset*",
+                  "C:\Program Files\WiX Toolset*"
+              )
+
+              foreach ($candidateRoot in $candidateRoots) {
+                  $matches = Get-ChildItem -Path $candidateRoot -Filter candle.exe -Recurse -ErrorAction SilentlyContinue
+                  foreach ($match in $matches) {
+                      $directory = $match.DirectoryName
+                      if (Test-Path (Join-Path $directory "light.exe")) {
+                          return $directory
+                      }
+                  }
+              }
+
+              return $null
+          }
+
+          $wixPath = Find-WixBin
+          if (-not $wixPath) {
               Write-Host "WiX Toolset not found. Installing via Chocolatey..."
               choco install wixtoolset --no-progress -y
-              $wixPath = "C:\Program Files (x86)\WiX Toolset v3.11\bin"
+              $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+              $wixPath = Find-WixBin
           }
-          if (Test-Path $wixPath) {
+
+          if ($wixPath -and (Test-Path (Join-Path $wixPath "candle.exe")) -and (Test-Path (Join-Path $wixPath "light.exe"))) {
+              Write-Host "WiX Toolset found at $wixPath"
               echo "WIX_PATH=$wixPath" >> $env:GITHUB_ENV
           } else {
               Write-Error "Failed to locate or install WiX Toolset."

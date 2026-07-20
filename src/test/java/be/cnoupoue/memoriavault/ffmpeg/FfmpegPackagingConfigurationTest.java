@@ -47,9 +47,13 @@ class FfmpegPackagingConfigurationTest {
         .contains("--java-options '-Dmemoriavault.ffmpeg.path=$APPDIR\\ffmpeg\\ffmpeg.exe'");
     assertThat(workflow).contains("--java-options \"-Dmemoriavault.desktop=true\"");
     assertThat(workflow).contains("--java-options \"-Dmemoriavault.browser.auto-open=false\"");
-    assertThat(packagingScript).contains("-Pproduction,windows-desktop");
+    assertThat(packagingScript)
+        .contains("\"-Pproduction,windows-desktop\"")
+        .contains("$jpackageCommandTemplate = @'")
+        .contains("$jpackageCommand = $jpackageCommandTemplate -f")
+        .doesNotContain("`$APPDIR");
     assertThat(packagingScript).contains("-Dmemoriavault.desktop=true");
     assertThat(packagingScript).contains("-Dmemoriavault.browser.auto-open=false");
-    assertThat(packagingScript).contains("-Dmemoriavault.ffmpeg.path=`$APPDIR\\ffmpeg\\ffmpeg.exe");
+    assertThat(packagingScript).contains("-Dmemoriavault.ffmpeg.path=$APPDIR\\ffmpeg\\ffmpeg.exe");
   }
 }

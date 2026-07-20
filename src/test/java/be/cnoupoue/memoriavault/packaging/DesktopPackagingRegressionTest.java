@@ -71,17 +71,30 @@ class DesktopPackagingRegressionTest {
     String workflow = Files.readString(Path.of(".github/workflows/release-windows.yml"));
     String packagingScript =
         Files.readString(Path.of("packaging/windows/scripts/package-windows.ps1"));
+    String windowsReadme = Files.readString(Path.of("packaging/windows/README.md"));
 
     assertThat(workflow).contains("npm --prefix frontend test");
     assertThat(workflow).doesNotContain("--watchAll");
-    assertThat(packagingScript).contains("-Pproduction,windows-desktop");
+    assertThat(workflow)
+        .contains("function Find-WixBin")
+        .contains("Get-Command candle.exe")
+        .contains("light.exe")
+        .contains("${env:ChocolateyInstall}\\lib\\wixtoolset\\tools");
+    assertThat(workflow).doesNotContain("WiX Toolset v3.11\\bin");
+    assertThat(windowsReadme).contains("WiX Toolset v3.x").doesNotContain("WiX Toolset v3.11");
+    assertThat(packagingScript)
+        .contains("\"-Pproduction,windows-desktop\"")
+        .contains("$jpackageCommandTemplate = @'")
+        .contains("'@")
+        .contains("$jpackageCommand = $jpackageCommandTemplate -f")
+        .doesNotContain("`$APPDIR");
     assertThat(workflow).contains("--java-options \"-Dmemoriavault.desktop=true\"");
     assertThat(workflow).contains("--java-options \"-Dmemoriavault.browser.auto-open=false\"");
     assertThat(workflow)
         .contains("--java-options '-Dmemoriavault.ffmpeg.path=$APPDIR\\ffmpeg\\ffmpeg.exe'");
     assertThat(packagingScript).contains("-Dmemoriavault.desktop=true");
     assertThat(packagingScript).contains("-Dmemoriavault.browser.auto-open=false");
-    assertThat(packagingScript).contains("-Dmemoriavault.ffmpeg.path=`$APPDIR\\ffmpeg\\ffmpeg.exe");
+    assertThat(packagingScript).contains("-Dmemoriavault.ffmpeg.path=$APPDIR\\ffmpeg\\ffmpeg.exe");
   }
 
   @Test
