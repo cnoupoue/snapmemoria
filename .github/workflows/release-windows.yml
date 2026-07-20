@@ -54,16 +54,56 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mvnw_with_retry() {
+            local attempt
+            local max_attempts=3
+            local delay_seconds=10
+
+            for attempt in $(seq 1 "${max_attempts}"); do
+              if ./mvnw "$@"; then
+                return 0
+              fi
+
+              if [ "${attempt}" -eq "${max_attempts}" ]; then
+                return 1
+              fi
+
+              echo "Maven command failed; retrying in ${delay_seconds}s (attempt ${attempt}/${max_attempts})." >&2
+              sleep "${delay_seconds}"
+              delay_seconds=$((delay_seconds * 2))
+            done
+          }
+
           echo "=== Running Frontend Tests ==="
           npm --prefix frontend test
           echo "=== Running Backend Tests ==="
-          ./mvnw test
+          mvnw_with_retry test
 
       - name: Validate tag and Maven version
         id: version
         shell: bash
         run: |
           set -euo pipefail
+          mvnw_with_retry() {
+            local attempt
+            local max_attempts=3
+            local delay_seconds=10
+
+            for attempt in $(seq 1 "${max_attempts}"); do
+              if ./mvnw "$@"; then
+                return 0
+              fi
+
+              if [ "${attempt}" -eq "${max_attempts}" ]; then
+                return 1
+              fi
+
+              echo "Maven command failed; retrying in ${delay_seconds}s (attempt ${attempt}/${max_attempts})." >&2
+              sleep "${delay_seconds}"
+              delay_seconds=$((delay_seconds * 2))
+            done
+          }
+
           tag="${GITHUB_REF_NAME}"
           release_tag="${tag#win-}"
           if ! printf '%s\n' "${release_tag}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$' ; then
@@ -73,7 +113,7 @@ jobs:
 
           release_version="${release_tag#v}"
           base_version="${release_version%%-*}"
-          maven_version="$(./mvnw -q -DforceStdout help:evaluate -Dexpression=project.version)"
+          maven_version="$(mvnw_with_retry -q -DforceStdout help:evaluate -Dexpression=project.version)"
 
           if [ "${maven_version}" != "${release_version}" ] \
             && [ "${maven_version}" != "${release_version}-SNAPSHOT" ] \

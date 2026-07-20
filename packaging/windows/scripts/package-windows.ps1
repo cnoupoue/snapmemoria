@@ -5,6 +5,35 @@ param (
 
 Set-StrictMode -Version Latest
 
+function Invoke-MavenWithRetry {
+    param (
+        [string[]]$MavenArguments
+    )
+
+    $maxAttempts = 3
+    $delaySeconds = 10
+
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        $output = & .\mvnw.cmd @MavenArguments 2>&1
+        $exitCode = $LASTEXITCODE
+
+        if ($exitCode -eq 0) {
+            $output
+            return
+        }
+
+        $output | ForEach-Object { Write-Host $_ }
+
+        if ($attempt -eq $maxAttempts) {
+            throw "Maven command failed after $maxAttempts attempts: $($MavenArguments -join ' ')"
+        }
+
+        Write-Host "Maven command failed; retrying in ${delaySeconds}s (attempt $attempt/$maxAttempts)."
+        Start-Sleep -Seconds $delaySeconds
+        $delaySeconds = $delaySeconds * 2
+    }
+}
+
 # Validate supported architecture early
 if ($Arch -ne "x64") {
     Write-Error "Unsupported architecture: $Arch. Only 'x64' builds are currently supported for Windows packaging."
@@ -20,9 +49,9 @@ $ffmpegDest = Join-Path $ffmpegDir 'ffmpeg.exe'
 Write-Host "=== RESOLVING MAVEN METADATA ==="
 # Query Maven directly for project version and artifact name instead of regex parsing
 if ([string]::IsNullOrEmpty($Version)) {
-    $Version = (& .\mvnw.cmd -q -DforceStdout help:evaluate -Dexpression=project.version)
+    $Version = (Invoke-MavenWithRetry -MavenArguments @("-q", "-DforceStdout", "help:evaluate", "-Dexpression=project.version"))
 }
-$finalName = (& .\mvnw.cmd -q -DforceStdout help:evaluate -Dexpression=project.build.finalName)
+$finalName = (Invoke-MavenWithRetry -MavenArguments @("-q", "-DforceStdout", "help:evaluate", "-Dexpression=project.build.finalName"))
 $jarName = "$finalName.jar"
 
 Write-Host "Target Version: $Version"
@@ -69,8 +98,7 @@ if (-not (Test-Path $ffmpegDest)) {
 # 2. Executing Clean Maven Package
 Write-Host "Compiling production artifact via clean package..."
 # Note: The CI release workflow runs full test validation suites before invoking this script
-& .\mvnw.cmd clean package "-Pproduction,windows-desktop" -DskipTests
-if ($LASTEXITCODE -ne 0) { throw "Maven compilation pipeline returned a non-zero exit code." }
+Invoke-MavenWithRetry -MavenArguments @("clean", "package", "-Pproduction,windows-desktop", "-DskipTests")
 
 # 3. Setting Up Runtime Input Directory For jpackage
 Write-Host "Preparing jpackage isolated input staging: $jpackageInput"

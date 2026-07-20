@@ -76,6 +76,11 @@ class DesktopPackagingRegressionTest {
     assertThat(workflow).contains("npm --prefix frontend test");
     assertThat(workflow).doesNotContain("--watchAll");
     assertThat(workflow)
+        .contains("mvnw_with_retry()")
+        .contains("mvnw_with_retry test")
+        .contains(
+            "maven_version=\"$(mvnw_with_retry -q -DforceStdout help:evaluate -Dexpression=project.version)\"");
+    assertThat(workflow)
         .contains("function Find-WixBin")
         .contains("Get-Command candle.exe")
         .contains("light.exe")
@@ -83,6 +88,11 @@ class DesktopPackagingRegressionTest {
     assertThat(workflow).doesNotContain("WiX Toolset v3.11\\bin");
     assertThat(windowsReadme).contains("WiX Toolset v3.x").doesNotContain("WiX Toolset v3.11");
     assertThat(packagingScript)
+        .contains("function Invoke-MavenWithRetry")
+        .contains(
+            "Invoke-MavenWithRetry -MavenArguments @(\"-q\", \"-DforceStdout\", \"help:evaluate\", \"-Dexpression=project.version\")")
+        .contains(
+            "Invoke-MavenWithRetry -MavenArguments @(\"clean\", \"package\", \"-Pproduction,windows-desktop\", \"-DskipTests\")")
         .contains("\"-Pproduction,windows-desktop\"")
         .contains("The release workflow now executes jpackage directly after this staging script.")
         .doesNotContain("`$APPDIR")

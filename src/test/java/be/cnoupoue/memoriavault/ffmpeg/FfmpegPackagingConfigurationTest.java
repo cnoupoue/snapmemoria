@@ -48,6 +48,9 @@ class FfmpegPackagingConfigurationTest {
     assertThat(workflow).contains("--java-options \"-Dmemoriavault.desktop=true\"");
     assertThat(workflow).contains("--java-options \"-Dmemoriavault.browser.auto-open=false\"");
     assertThat(packagingScript)
+        .contains("function Invoke-MavenWithRetry")
+        .contains(
+            "Invoke-MavenWithRetry -MavenArguments @(\"clean\", \"package\", \"-Pproduction,windows-desktop\", \"-DskipTests\")")
         .contains("\"-Pproduction,windows-desktop\"")
         .contains("The release workflow now executes jpackage directly after this staging script.")
         .doesNotContain("`$APPDIR")
