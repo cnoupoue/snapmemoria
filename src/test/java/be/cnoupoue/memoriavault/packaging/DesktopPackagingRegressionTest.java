@@ -98,6 +98,9 @@ class DesktopPackagingRegressionTest {
         .doesNotContain("`$APPDIR")
         .doesNotContain("$jpackageCommandTemplate")
         .doesNotContain("jpackage --type exe");
+    assertThat(Pattern.compile("[^\\x00-\\x7F]").matcher(packagingScript).find())
+        .as("Windows PowerShell 5.1 packaging script must stay ASCII-only")
+        .isFalse();
     assertThat(workflow).contains("--java-options \"-Dmemoriavault.desktop=true\"");
     assertThat(workflow).contains("--java-options \"-Dmemoriavault.browser.auto-open=false\"");
     assertThat(workflow)

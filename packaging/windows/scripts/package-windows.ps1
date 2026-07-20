@@ -76,7 +76,7 @@ if (-not (Test-Path $ffmpegDest)) {
         Remove-Item $zipPath -Force
         throw "Cryptographic verification failed! Expected hash: $expectedHash, but got: $actualHash"
     }
-    Write-Host "✓ FFmpeg archive integrity verified."
+    Write-Host "FFmpeg archive integrity verified."
 
     Write-Host "Extracting binaries..."
     $tempExtractDir = Join-Path $ffmpegDir 'temp_extract'
@@ -85,7 +85,7 @@ if (-not (Test-Path $ffmpegDest)) {
     $extractedExe = Get-ChildItem -Path $tempExtractDir -Filter 'ffmpeg.exe' -Recurse | Select-Object -First 1
     if ($extractedExe) {
         Move-Item $extractedExe.FullName -Destination $ffmpegDest -Force
-        Write-Host "✓ FFmpeg successfully isolated to $ffmpegDest"
+        Write-Host "FFmpeg successfully isolated to $ffmpegDest"
     } else {
         throw "Fatal: Could not locate ffmpeg.exe within the downloaded archive payload."
     }
@@ -118,7 +118,7 @@ Copy-Item $targetJarPath $jpackageInput
 $jpackageFfmpegDir = Join-Path $jpackageInput 'ffmpeg'
 New-Item -ItemType Directory -Path $jpackageFfmpegDir -Force | Out-Null
 Copy-Item $ffmpegDest (Join-Path $jpackageFfmpegDir 'ffmpeg.exe') -Force
-Write-Host "✓ Bundled FFmpeg staged into relative app folder layout structure."
+Write-Host "Bundled FFmpeg staged into relative app folder layout structure."
 
 # 5. Local Development Environment Instantiation Only
 $envFilePath = Join-Path $root '.env'
