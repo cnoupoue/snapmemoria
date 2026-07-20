@@ -93,9 +93,10 @@ class DesktopPackagingRegressionTest {
         .contains("function Find-InstalledFfmpeg")
         .contains("function Install-FfmpegWithChocolatey")
         .contains("function Stage-FfmpegFromInstalledLocation")
-        .contains(
-            "Invoke-WebRequest -Uri $ffmpegUrl -OutFile $zipPath -UseBasicParsing -ErrorAction Stop")
-        .contains("Falling back to Chocolatey-managed FFmpeg.")
+        .contains("$chocoOutput = & choco.exe install ffmpeg --no-progress -y 2>&1")
+        .contains("$chocoExitCode = $LASTEXITCODE")
+        .contains("[string]::IsNullOrWhiteSpace($installedFfmpeg)")
+        .contains("Resolving Windows FFmpeg through Chocolatey.")
         .contains(
             "Invoke-MavenWithRetry -MavenArguments @(\"-q\", \"-DforceStdout\", \"help:evaluate\", \"-Dexpression=project.version\")")
         .contains(
@@ -104,7 +105,17 @@ class DesktopPackagingRegressionTest {
         .contains("The release workflow now executes jpackage directly after this staging script.")
         .doesNotContain("`$APPDIR")
         .doesNotContain("$jpackageCommandTemplate")
-        .doesNotContain("jpackage --type exe");
+        .doesNotContain("jpackage --type exe")
+        .doesNotContain("gyan.dev")
+        .doesNotContain("Invoke-WebRequest")
+        .doesNotContain("Join-String");
+    assertThat(
+            Pattern.compile(
+                    "(?m)^\\s*choco(?:\\.exe)?\\s+install\\s+ffmpeg\\s+--no-progress\\s+-y\\s*$")
+                .matcher(packagingScript)
+                .find())
+        .as("Chocolatey output must be captured before writing to host")
+        .isFalse();
     assertThat(Pattern.compile("[^\\x00-\\x7F]").matcher(packagingScript).find())
         .as("Windows PowerShell 5.1 packaging script must stay ASCII-only")
         .isFalse();

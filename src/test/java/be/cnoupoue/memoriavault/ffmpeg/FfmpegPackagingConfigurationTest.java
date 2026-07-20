@@ -51,14 +51,17 @@ class FfmpegPackagingConfigurationTest {
         .contains("$ErrorActionPreference = \"Stop\"")
         .contains("function Invoke-MavenWithRetry")
         .contains("function Install-FfmpegWithChocolatey")
-        .contains("Falling back to Chocolatey-managed FFmpeg.")
+        .contains("$chocoOutput = & choco.exe install ffmpeg --no-progress -y 2>&1")
+        .contains("Resolving Windows FFmpeg through Chocolatey.")
         .contains(
             "Invoke-MavenWithRetry -MavenArguments @(\"clean\", \"package\", \"-Pproduction,windows-desktop\", \"-DskipTests\")")
         .contains("\"-Pproduction,windows-desktop\"")
         .contains("The release workflow now executes jpackage directly after this staging script.")
         .doesNotContain("`$APPDIR")
         .doesNotContain("$jpackageCommandTemplate")
-        .doesNotContain("jpackage --type exe");
+        .doesNotContain("jpackage --type exe")
+        .doesNotContain("gyan.dev")
+        .doesNotContain("Invoke-WebRequest");
     assertThat(packagingScript).contains("-Dmemoriavault.desktop=true");
     assertThat(packagingScript).contains("-Dmemoriavault.browser.auto-open=false");
     assertThat(packagingScript).contains("-Dmemoriavault.ffmpeg.path=$APPDIR\\ffmpeg\\ffmpeg.exe");

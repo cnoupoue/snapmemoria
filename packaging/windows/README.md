@@ -7,7 +7,7 @@ This directory contains the scripts, icons, and configurations required to compi
 
 ## 📁 Folder Structure
 
-*   `scripts/package-windows.ps1`: The main staging script. It safely extracts project metadata from Maven, downloads and validates the pinned FFmpeg binary via SHA-256 when available, falls back to a Chocolatey-managed FFmpeg install if the pinned archive is unavailable, compiles the distribution code, and builds the staging input for `jpackage`.
+*   `scripts/package-windows.ps1`: The main staging script. It safely extracts project metadata from Maven, resolves FFmpeg through Chocolatey, compiles the distribution code, and builds the staging input for `jpackage`.
 *   `scripts/sign-sqlite-native-libs.ps1`: An optional helper utility to unpack, sign, and repack native SQLite binaries if needed.
 *   `icon/MemoriaVault.ico`: The official application icon used for the final installer executable and Start Menu shortcuts.
 *   `ffmpeg/win-x64/`: The isolated directory where the verified and structurally embedded `ffmpeg.exe` binary is cached.
@@ -22,7 +22,7 @@ Before executing the packaging lifecycle on your local Windows workstation, ensu
 2.  **Node.js 22** & **npm**: Required to build the web production assets for the user interface.
 3.  **WiX Toolset v3.x**: Required by `jpackage` to generate executable Windows Installers (`.exe`/`.msi`).
     *   *Quick Installation via Chocolatey:* `choco install wixtoolset -y`
-4.  **Chocolatey**: Used by CI as a fallback source for FFmpeg when the pinned archive URL is unavailable.
+4.  **Chocolatey**: Required to install or locate FFmpeg for the packaged runtime.
 
 ---
 
@@ -44,8 +44,7 @@ Run the staging script from the repository root. This script enforces the follow
 
 * Validates that the requested target architecture matches `x64`.
 * Queries Maven directly for project version strings and artifact names (removing error-prone text parsing).
-* Downloads the pinned production release of **FFmpeg 7.1** and validates its cryptographic integrity with a strict **SHA-256 hash check** when the archive is available.
-* Falls back to a Chocolatey-managed FFmpeg install if the pinned archive cannot be downloaded, so packaging does not fail on a removed upstream URL.
+* Resolves FFmpeg through Chocolatey and copies the real `ffmpeg.exe` into the isolated `jpackage` input layout.
 * Packages the standalone code using `mvn clean package`.
 
 ```powershell

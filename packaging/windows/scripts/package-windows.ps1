@@ -36,28 +36,32 @@ function Invoke-MavenWithRetry {
 }
 
 function Find-InstalledFfmpeg {
-    $candidateRoots = @(
-        "${env:ChocolateyInstall}\lib\ffmpeg\tools",
+    $candidateRoots = @()
+    if (-not [string]::IsNullOrWhiteSpace($env:ChocolateyInstall)) {
+        $candidateRoots += (Join-Path $env:ChocolateyInstall 'lib\ffmpeg\tools')
+    }
+
+    $candidateRoots += @(
         "C:\ProgramData\chocolatey\lib\ffmpeg\tools",
         "C:\tools"
     )
 
     foreach ($candidateRoot in $candidateRoots) {
-        if ([string]::IsNullOrWhiteSpace($candidateRoot) -or -not (Test-Path $candidateRoot)) {
+        if ([string]::IsNullOrWhiteSpace($candidateRoot) -or -not (Test-Path -LiteralPath $candidateRoot -PathType Container)) {
             continue
         }
 
-        $matches = Get-ChildItem -Path $candidateRoot -Filter 'ffmpeg.exe' -Recurse -ErrorAction SilentlyContinue
+        $matches = Get-ChildItem -LiteralPath $candidateRoot -Filter 'ffmpeg.exe' -Recurse -ErrorAction SilentlyContinue | Sort-Object FullName
         foreach ($match in $matches) {
-            if (Test-Path $match.FullName) {
-                return $match.FullName
+            if (Test-Path -LiteralPath $match.FullName -PathType Leaf) {
+                return [string]$match.FullName
             }
         }
     }
 
     $command = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
-    if ($command) {
-        return $command.Source
+    if ($command -and -not [string]::IsNullOrWhiteSpace($command.Source) -and (Test-Path -LiteralPath $command.Source -PathType Leaf)) {
+        return [string]$command.Source
     }
 
     return $null
@@ -69,13 +73,29 @@ function Install-FfmpegWithChocolatey {
     }
 
     Write-Host "Installing FFmpeg via Chocolatey fallback..."
-    choco install ffmpeg --no-progress -y
-    if ($LASTEXITCODE -ne 0) {
+    $chocoOutput = & choco.exe install ffmpeg --no-progress -y 2>&1
+    $chocoExitCode = $LASTEXITCODE
+    foreach ($line in $chocoOutput) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$line)) {
+            Write-Host $line
+        }
+    }
+
+    if ($chocoExitCode -ne 0) {
         throw "Chocolatey failed to install FFmpeg."
     }
 
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
-    return Find-InstalledFfmpeg
+    $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $pathSegments = @($machinePath, $userPath, $env:Path) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    $env:Path = [string]::Join(';', [string[]]$pathSegments)
+
+    $resolvedFfmpeg = Find-InstalledFfmpeg
+    if ([string]::IsNullOrWhiteSpace($resolvedFfmpeg)) {
+        throw "Chocolatey completed but no FFmpeg executable could be located."
+    }
+
+    return [string]$resolvedFfmpeg
 }
 
 function Stage-FfmpegFromInstalledLocation {
@@ -83,16 +103,20 @@ function Stage-FfmpegFromInstalledLocation {
         [string]$Destination
     )
 
-    $installedFfmpeg = Find-InstalledFfmpeg
-    if (-not $installedFfmpeg) {
+    [string]$installedFfmpeg = Find-InstalledFfmpeg
+    if ([string]::IsNullOrWhiteSpace($installedFfmpeg)) {
         $installedFfmpeg = Install-FfmpegWithChocolatey
     }
 
-    if (-not $installedFfmpeg -or -not (Test-Path $installedFfmpeg)) {
+    if ([string]::IsNullOrWhiteSpace($installedFfmpeg)) {
         throw "Could not locate FFmpeg after Chocolatey fallback installation."
     }
 
-    Copy-Item $installedFfmpeg $Destination -Force
+    if (-not (Test-Path -LiteralPath $installedFfmpeg -PathType Leaf)) {
+        throw "Resolved FFmpeg path does not exist: $installedFfmpeg"
+    }
+
+    Copy-Item -LiteralPath $installedFfmpeg -Destination $Destination -Force
     Write-Host "FFmpeg staged from installed location: $installedFfmpeg"
 }
 
@@ -119,52 +143,11 @@ $jarName = "$finalName.jar"
 Write-Host "Target Version: $Version"
 Write-Host "Expected JAR Name: $jarName"
 
-# 1. Secured, Hash-Verified FFmpeg Downloader
-if (-not (Test-Path $ffmpegDest)) {
-    Write-Host "FFmpeg binary missing in $ffmpegDest. Initializing pinned verification download..."
+# 1. Windows FFmpeg staging
+if (-not (Test-Path -LiteralPath $ffmpegDest -PathType Leaf)) {
+    Write-Host "FFmpeg binary missing in $ffmpegDest. Resolving Windows FFmpeg through Chocolatey..."
     New-Item -ItemType Directory -Path $ffmpegDir -Force | Out-Null
-
-    # Pinned production-grade release of FFmpeg with cryptographic enforcement
-    $ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-7.1-essentials_build.zip"
-    $expectedHash = "6ED8BCC0B426AB5B6AA36D2CB187E6924D5B1FE26B33D4F5A170F429BAFF89B5"
-    $zipPath = Join-Path $ffmpegDir 'ffmpeg.zip'
-
-    $tempExtractDir = Join-Path $ffmpegDir 'temp_extract'
-    try {
-        Write-Host "Downloading pinned FFmpeg archive from $ffmpegUrl ..."
-        Invoke-WebRequest -Uri $ffmpegUrl -OutFile $zipPath -UseBasicParsing -ErrorAction Stop
-
-        if (-not (Test-Path $zipPath)) {
-            throw "FFmpeg archive download did not create $zipPath."
-        }
-
-        Write-Host "Verifying SHA-256 checksum..."
-        $actualHash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash
-        if ($actualHash -ne $expectedHash) {
-            throw "Cryptographic verification failed! Expected hash: $expectedHash, but got: $actualHash"
-        }
-        Write-Host "FFmpeg archive integrity verified."
-
-        Write-Host "Extracting binaries..."
-        Expand-Archive -Path $zipPath -DestinationPath $tempExtractDir -Force
-
-        $extractedExe = Get-ChildItem -Path $tempExtractDir -Filter 'ffmpeg.exe' -Recurse | Select-Object -First 1
-        if ($extractedExe) {
-            Move-Item $extractedExe.FullName -Destination $ffmpegDest -Force
-            Write-Host "FFmpeg successfully isolated to $ffmpegDest"
-        } else {
-            throw "Fatal: Could not locate ffmpeg.exe within the downloaded archive payload."
-        }
-    } catch {
-        Write-Warning "Pinned FFmpeg download path failed: $($_.Exception.Message)"
-        Write-Warning "Falling back to Chocolatey-managed FFmpeg."
-        Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
-        Remove-Item -Recurse -Force $tempExtractDir -ErrorAction SilentlyContinue
-        Stage-FfmpegFromInstalledLocation -Destination $ffmpegDest
-    } finally {
-        Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
-        Remove-Item -Recurse -Force $tempExtractDir -ErrorAction SilentlyContinue
-    }
+    Stage-FfmpegFromInstalledLocation -Destination $ffmpegDest
 }
 
 # 2. Executing Clean Maven Package
