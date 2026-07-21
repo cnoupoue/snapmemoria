@@ -1,15 +1,14 @@
 
 # Windows Native Packaging — Memoria Vault
 
-This directory contains the scripts, icons, and configurations required to compile, validate, and package **Memoria Vault** into a native Windows desktop application (`.exe`) embedding a native JavaFX graphical user interface (`WebView`).
+This directory contains the scripts and configurations required to compile, validate, and package **Memoria Vault** into a native Windows desktop application (`.exe`) embedding a native JavaFX graphical user interface (`WebView`).
 
 ---
 
 ## 📁 Folder Structure
 
-*   `scripts/package-windows.ps1`: The main staging script. It safely extracts project metadata from Maven, resolves FFmpeg through Chocolatey, compiles the distribution code, and builds the staging input for `jpackage`.
+*   `scripts/package-windows.ps1`: The main staging script. It safely extracts project metadata from Maven, resolves FFmpeg through Chocolatey, compiles the distribution code, generates the Windows icon, and builds the staging input for `jpackage`.
 *   `scripts/sign-sqlite-native-libs.ps1`: An optional helper utility to unpack, sign, and repack native SQLite binaries if needed.
-*   `icon/MemoriaVault.ico`: The official application icon used for the final installer executable and Start Menu shortcuts.
 *   `ffmpeg/win-x64/`: The isolated directory where the verified and structurally embedded `ffmpeg.exe` binary is cached.
 
 ---
@@ -45,6 +44,7 @@ Run the staging script from the repository root. This script enforces the follow
 * Validates that the requested target architecture matches `x64`.
 * Queries Maven directly for project version strings and artifact names (removing error-prone text parsing).
 * Resolves FFmpeg through Chocolatey and copies the real `ffmpeg.exe` into the isolated `jpackage` input layout.
+* Generates `dist/generated-icons/MemoriaVault.ico` from `src/main/resources/icon.png`.
 * Packages the standalone code using `mvn clean package`.
 
 ```powershell
@@ -69,7 +69,7 @@ jpackage --type exe `
          --java-options "-Dmemoriavault.desktop=true" `
          --java-options "-Dmemoriavault.browser.auto-open=false" `
          --java-options '-Dmemoriavault.ffmpeg.path=$APPDIR\ffmpeg\ffmpeg.exe' `
-         --icon "packaging/windows/icon/MemoriaVault.ico" `
+         --icon "dist/generated-icons/MemoriaVault.ico" `
          --win-shortcut `
          --win-menu `
          --jlink-options "--strip-debug --no-man-pages --no-header-files --compress zip-6" `

@@ -164,9 +164,9 @@ describe('SettingsPage', () => {
     expect(screen.getByLabelText('Source name')).toHaveValue(
       'snapchat-memories',
     );
-    expect(
-      screen.getByLabelText('Or enter the folder path manually'),
-    ).toHaveValue('/Volumes/SNAPCHAT/snapchat-memories');
+    expect(screen.getByLabelText('Folder path')).toHaveValue(
+      '/Volumes/SNAPCHAT/snapchat-memories',
+    );
   });
 
   it('preserves an existing manually typed source name', async () => {
@@ -187,9 +187,9 @@ describe('SettingsPage', () => {
     );
 
     expect(screen.getByLabelText('Source name')).toHaveValue('My USB');
-    expect(
-      screen.getByLabelText('Or enter the folder path manually'),
-    ).toHaveValue('/Volumes/SNAPCHAT/snapchat-memories');
+    expect(screen.getByLabelText('Folder path')).toHaveValue(
+      '/Volumes/SNAPCHAT/snapchat-memories',
+    );
   });
 
   it('keeps form values unchanged when folder selection is cancelled', async () => {
@@ -206,7 +206,7 @@ describe('SettingsPage', () => {
 
     await user.type(await screen.findByLabelText('Source name'), 'Manual name');
     await user.type(
-      screen.getByLabelText('Or enter the folder path manually'),
+      screen.getByLabelText('Folder path'),
       '/Volumes/manual/snapchat-memories',
     );
     await user.click(
@@ -214,9 +214,9 @@ describe('SettingsPage', () => {
     );
 
     expect(screen.getByLabelText('Source name')).toHaveValue('Manual name');
-    expect(
-      screen.getByLabelText('Or enter the folder path manually'),
-    ).toHaveValue('/Volumes/manual/snapchat-memories');
+    expect(screen.getByLabelText('Folder path')).toHaveValue(
+      '/Volumes/manual/snapchat-memories',
+    );
     expect(screen.queryByText(/unavailable/i)).not.toBeInTheDocument();
   });
 
@@ -247,9 +247,7 @@ describe('SettingsPage', () => {
         'Folder selection is unavailable in this environment. Enter the folder path manually.',
       ),
     ).toBeInTheDocument();
-    expect(
-      screen.getByLabelText('Or enter the folder path manually'),
-    ).toBeEnabled();
+    expect(screen.getByLabelText('Folder path')).toBeEnabled();
   });
 
   it('renders available source status', async () => {
@@ -433,7 +431,7 @@ Local database: Ready`);
 
     render(<SettingsPage onSourceScanned={vi.fn()} />);
 
-    expect(await screen.findByText('Snapchat USB')).toBeInTheDocument();
+    expect(await screen.findAllByText('Snapchat USB')).not.toHaveLength(0);
 
     await user.click(
       screen.getByRole('button', {
@@ -446,6 +444,30 @@ Local database: Ready`);
     expect(copiedReport).not.toContain('Snapchat USB');
     expect(copiedReport).not.toContain('/Volumes/SNAP');
     expect(copiedReport).not.toContain('snapchat-memories');
+  });
+
+  it('opens Favorites Backup help from the question mark button', async () => {
+    const user = userEvent.setup();
+
+    getMemorySourcesMock.mockResolvedValue([buildSource({ favoriteCount: 2 })]);
+
+    render(<SettingsPage onSourceScanned={vi.fn()} />);
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'What is Favorites Backup?',
+      }),
+    );
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent(
+      'Favorites Backup saves a small JSON file',
+    );
+    expect(dialog).toHaveTextContent('not your photos or videos');
+
+    await user.click(screen.getByRole('button', { name: 'Got it' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('copies sanitized last video playback diagnostics without media URLs', async () => {
@@ -594,10 +616,7 @@ Local database: Ready`);
     render(<SettingsPage onSourceScanned={vi.fn()} />);
 
     await user.type(await screen.findByLabelText('Source name'), source.name);
-    await user.type(
-      screen.getByLabelText('Or enter the folder path manually'),
-      source.rootPath,
-    );
+    await user.type(screen.getByLabelText('Folder path'), source.rootPath);
     await user.click(screen.getByRole('button', { name: 'Add source' }));
 
     await waitFor(() => {
@@ -880,7 +899,7 @@ Local database: Ready`);
       />,
     );
 
-    expect(await screen.findByText('Snapchat USB')).toBeInTheDocument();
+    expect(await screen.findAllByText('Snapchat USB')).not.toHaveLength(0);
 
     await user.click(screen.getByRole('button', { name: 'Remove' }));
 

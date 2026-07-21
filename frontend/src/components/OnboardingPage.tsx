@@ -16,12 +16,11 @@ export function OnboardingPage({ onAddSource }: OnboardingPageProps) {
         <p className="eyebrow">First launch</p>
         <h2>Welcome to Memoria Vault</h2>
         <p className="onboarding-lede">
-          Rediscover your memories, privately. Choose your exported archive
-          folder and browse it from this computer.
+          A private viewer for exported memories on this computer.
         </p>
 
         <div className="privacy-note">
-          <strong>Your files stay on your computer.</strong>
+          <strong>Local only.</strong>
           <span>Nothing is uploaded.</span>
         </div>
 
@@ -38,7 +37,7 @@ export function OnboardingPage({ onAddSource }: OnboardingPageProps) {
             onClick={() => setIsFolderHelpOpen((current) => !current)}
             type="button"
           >
-            Learn where to find my export folder
+            Where is the folder?
           </button>
         </div>
       </div>
@@ -47,45 +46,31 @@ export function OnboardingPage({ onAddSource }: OnboardingPageProps) {
         <section className="onboarding-panel">
           <ol className="onboarding-steps">
             <li>
-              <span>Step 1</span>
-              <strong>Choose your exported archive folder.</strong>
-              <p>
-                Use the folder from your downloaded data export. Compatible
-                export folder structures are supported descriptively.
-              </p>
+              <span>1</span>
+              <strong>Choose your export</strong>
+              <p>Select the parent folder from your downloaded archive.</p>
             </li>
             <li>
-              <span>Step 2</span>
-              <strong>Add the parent folder.</strong>
-              <p>
-                Select the folder that contains all Memories folders, not just
-                one folder inside it.
-              </p>
+              <span>2</span>
+              <strong>Scan locally</strong>
+              <p>Memoria Vault indexes files in place.</p>
             </li>
             <li>
-              <span>Step 3</span>
-              <strong>Scan locally and start browsing.</strong>
-              <p>
-                Memoria Vault indexes memories in place so your archive becomes
-                easy to explore.
-              </p>
+              <span>3</span>
+              <strong>Browse your archive</strong>
+              <p>Photos, videos, favorites, and flashbacks stay on device.</p>
             </li>
           </ol>
         </section>
 
         <section className="folder-example-panel">
-          <p className="eyebrow">Correct folder</p>
+          <p className="eyebrow">Pick this folder</p>
           <pre className="folder-tree">{`exported-archive/
 ├── memories/
 ├── memories 2/
 ├── memories 3/
 └── ...`}</pre>
-          <p>Select the parent exported archive folder.</p>
-          <p>
-            Do not select only <strong>memories/</strong> if your export
-            contains <strong>memories 2</strong>, <strong>memories 3</strong>,
-            or more folders.
-          </p>
+          <p>Choose the folder that contains all memories folders.</p>
         </section>
       </div>
 
@@ -93,22 +78,14 @@ export function OnboardingPage({ onAddSource }: OnboardingPageProps) {
         <section className="onboarding-help">
           <h3>Where to look</h3>
           <p>
-            After downloading your archive data, unzip the export and look for
-            the folder that groups your memories folders together. External
-            drives are supported as long as the drive is connected when you scan
-            or view media.
+            Unzip your downloaded archive, then select the top folder that
+            groups the memories folders together. External drives work when
+            connected.
           </p>
         </section>
       )}
 
-      <section className="onboarding-help">
-        <h3>Independent tool</h3>
-        <p>{INDEPENDENCE_DISCLAIMER}</p>
-        <p>
-          Compatible Snapchat export formats may be read locally. Compatibility
-          references are descriptive only.
-        </p>
-      </section>
+      <p className="onboarding-disclaimer">{INDEPENDENCE_DISCLAIMER}</p>
     </section>
   );
 }

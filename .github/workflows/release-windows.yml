@@ -205,6 +205,10 @@ jobs:
               Write-Error "Runtime validation failed: FFmpeg binary missing from staged jpackage input. Packaged app layout broken."
               exit 1
           }
+          if (-not (Test-Path "dist/generated-icons/MemoriaVault.ico")) {
+              Write-Error "Runtime validation failed: generated Windows icon missing."
+              exit 1
+          }
           Write-Host "Dynamic staging verified: FFmpeg is safely embedded inside application bundle space."
 
       - name: Build Windows Executable via jpackage
@@ -233,7 +237,7 @@ jobs:
                    --java-options "-Dmemoriavault.desktop=true" `
                    --java-options "-Dmemoriavault.browser.auto-open=false" `
                    --java-options '-Dmemoriavault.ffmpeg.path=$APPDIR\ffmpeg\ffmpeg.exe' `
-                   --icon "packaging/windows/icon/MemoriaVault.ico" `
+                   --icon "dist/generated-icons/MemoriaVault.ico" `
                    --win-shortcut `
                    --win-menu `
                    --jlink-options "--strip-debug --no-man-pages --no-header-files --compress zip-6" `

@@ -277,6 +277,8 @@ export function SettingsPage({
   const [pendingRescanSource, setPendingRescanSource] =
     useState<MemorySource | null>(null);
   const [isBackingUpFavorites, setIsBackingUpFavorites] = useState(false);
+  const [isFavoritesBackupHelpOpen, setIsFavoritesBackupHelpOpen] =
+    useState(false);
   const [importSource, setImportSource] = useState<MemorySource | null>(null);
   const [restorePreview, setRestorePreview] = useState<{
     source: MemorySource;
@@ -945,7 +947,302 @@ export function SettingsPage({
         </div>
       )}
 
+      {isFavoritesBackupHelpOpen && (
+        <div aria-modal="true" className="confirmation-backdrop" role="dialog">
+          <section
+            aria-labelledby="favorites-backup-help-title"
+            className="confirmation-dialog favorites-help-dialog"
+          >
+            <h3 id="favorites-backup-help-title">Favorites Backup</h3>
+            <p>
+              Favorites Backup saves a small JSON file with the memories you
+              marked as favorites for one source.
+            </p>
+            <p>
+              Use it before rescanning, moving to a new computer, or rebuilding
+              your local database.
+            </p>
+            <p>
+              The backup stores matching details for favorites, not your photos
+              or videos. When restored, Memoria Vault matches those entries
+              against the selected source and marks the found memories again.
+            </p>
+            <p>
+              Restore happens only after you preview the file and confirm the
+              import.
+            </p>
+            <div className="confirmation-actions">
+              <button
+                className="primary-button"
+                onClick={() => setIsFavoritesBackupHelpOpen(false)}
+                type="button"
+              >
+                Got it
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       <section className="settings-section">
+        <div className="settings-section-header">
+          <div>
+            <p className="eyebrow">Start here</p>
+            <h3>Add an archive source</h3>
+          </div>
+        </div>
+
+        <div className="folder-picker-panel">
+          <button
+            className="primary-button"
+            disabled={isSelectingFolder || isCreating}
+            onClick={() => void handleChooseFolder()}
+            type="button"
+          >
+            {isSelectingFolder
+              ? 'Opening folder picker…'
+              : 'Choose exported archive folder'}
+          </button>
+          <p>Select the parent folder that contains your memories folders.</p>
+        </div>
+
+        {folderPickerMessage && (
+          <div className="state-message manual-path-fallback">
+            {folderPickerMessage}
+          </div>
+        )}
+
+        <form
+          className="source-form"
+          onSubmit={(event) => void handleCreateSource(event)}
+        >
+          <label>
+            Source name
+            <input
+              ref={nameInputRef}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Family archive drive"
+              value={name}
+            />
+          </label>
+
+          <label>
+            Folder path
+            <input
+              onChange={(event) => setRootPath(event.target.value)}
+              placeholder="/Volumes/MY_DRIVE/exported-archive"
+              value={rootPath}
+            />
+          </label>
+
+          <button
+            className="primary-button"
+            disabled={isCreating}
+            type="submit"
+          >
+            {isCreating ? 'Adding source…' : 'Add source'}
+          </button>
+        </form>
+
+        <p className="form-hint">
+          Use the parent folder, not an individual <code>memories</code>{' '}
+          subfolder.
+        </p>
+      </section>
+
+      <section className="settings-section">
+        <div className="settings-section-header">
+          <div>
+            <p className="eyebrow">Configured folders</p>
+            <h3>Memory sources</h3>
+          </div>
+
+          <button
+            className="secondary-button"
+            disabled={isLoading}
+            onClick={handleRefreshSources}
+            type="button"
+          >
+            Refresh
+          </button>
+        </div>
+
+        {isLoading && (
+          <div className="state-message">Loading configured sources…</div>
+        )}
+
+        {!isLoading && sources.length === 0 && (
+          <div className="state-message">
+            No source configured yet. Add an exported archive folder above.
+          </div>
+        )}
+
+        {!isLoading && sources.length > 0 && (
+          <div className="source-list">
+            {sources.map((source) => {
+              const isScanning = scanningSourceId === source.id;
+              const isDeleting = deletingSourceId === source.id;
+              const isRefreshingAvailability =
+                refreshingAvailabilitySourceId === source.id;
+              const isUnavailable = source.availabilityStatus !== 'AVAILABLE';
+              const sourceStateLabel = getSourceStateLabel(source, isScanning);
+
+              return (
+                <article className="source-card" key={source.id}>
+                  <div className="source-card-main">
+                    <div>
+                      <h4>{source.name}</h4>
+                      <span className="source-path">Local source folder</span>
+                    </div>
+
+                    <span
+                      className={`source-status source-status-${(isScanning
+                        ? 'RUNNING'
+                        : source.availabilityStatus.toLowerCase()
+                      ).toLowerCase()}`}
+                    >
+                      {sourceStateLabel}
+                    </span>
+                  </div>
+
+                  <div className="source-card-meta">
+                    <span>Last scan: {formatDate(source.lastScanAt)}</span>
+                    <span>{getStatusLabel(source.lastScanStatus)}</span>
+                    <span>
+                      {source.favoriteCount.toLocaleString()} favorite
+                      {source.favoriteCount === 1 ? '' : 's'}
+                    </span>
+                  </div>
+
+                  {isUnavailable && (
+                    <p className="source-availability-message">
+                      {source.availabilityMessage}
+                    </p>
+                  )}
+
+                  <div className="source-card-actions">
+                    <button
+                      className="primary-button"
+                      disabled={isScanning || isDeleting || isUnavailable}
+                      onClick={() => void handleScan(source)}
+                      type="button"
+                    >
+                      {isScanning ? 'Scanning…' : 'Scan source'}
+                    </button>
+
+                    <button
+                      className="secondary-button"
+                      disabled={isRefreshingAvailability}
+                      onClick={() =>
+                        void handleRefreshSourceAvailability(source)
+                      }
+                      type="button"
+                    >
+                      {isRefreshingAvailability
+                        ? 'Refreshing…'
+                        : 'Refresh status'}
+                    </button>
+
+                    <button
+                      className="danger-button"
+                      disabled={isDeleting}
+                      onClick={() => void handleDelete(source)}
+                      type="button"
+                    >
+                      {isDeleting ? 'Removing…' : 'Remove'}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className="settings-section">
+        <div className="settings-section-header">
+          <div>
+            <p className="eyebrow">Favorites</p>
+            <div className="section-title-row">
+              <h3>Favorites Backup</h3>
+              <button
+                aria-label="What is Favorites Backup?"
+                className="help-icon-button"
+                onClick={() => setIsFavoritesBackupHelpOpen(true)}
+                title="What is Favorites Backup?"
+                type="button"
+              >
+                ?
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {!isLoading && sources.length === 0 && (
+          <div className="state-message">
+            Add a source before backing up favorites.
+          </div>
+        )}
+
+        {!isLoading && sources.length > 0 && (
+          <div className="backup-source-list">
+            {sources.map((source) => (
+              <div className="backup-source-row" key={source.id}>
+                <div>
+                  <strong>{source.name}</strong>
+                  <span>
+                    {source.favoriteCount.toLocaleString()} favorite
+                    {source.favoriteCount === 1 ? '' : 's'}
+                  </span>
+                </div>
+
+                <div className="backup-source-actions">
+                  <button
+                    className="secondary-button"
+                    disabled={
+                      isBackingUpFavorites || deletingSourceId === source.id
+                    }
+                    onClick={() => void handleBackupFavorites(source)}
+                    type="button"
+                  >
+                    Export Favorites
+                  </button>
+
+                  <button
+                    className="secondary-button"
+                    disabled={
+                      isPreviewingRestore || deletingSourceId === source.id
+                    }
+                    onClick={() => handleChooseFavoritesBackup(source)}
+                    type="button"
+                  >
+                    {isPreviewingRestore && importSource?.id === source.id
+                      ? 'Reading backup…'
+                      : 'Import Favorites Backup'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="settings-section">
+        <div className="settings-section-header">
+          <div>
+            <p className="eyebrow">About</p>
+            <h3>Independent tool</h3>
+          </div>
+        </div>
+
+        <p className="diagnostic-message">{INDEPENDENCE_DISCLAIMER}</p>
+        <p className="diagnostic-message">
+          Compatible Snapchat export formats may be read locally. Compatibility
+          references are descriptive only.
+        </p>
+      </section>
+
+      <section className="settings-section settings-section-secondary">
         <div className="settings-section-header">
           <div>
             <p className="eyebrow">Beta support</p>
@@ -1036,220 +1333,6 @@ export function SettingsPage({
             </div>
           </>
         )}
-      </section>
-
-      <section className="settings-section">
-        <div className="settings-section-header">
-          <div>
-            <p className="eyebrow">New location</p>
-            <h3>Add an archive source</h3>
-          </div>
-        </div>
-
-        <div className="folder-picker-panel">
-          <button
-            className="primary-button"
-            disabled={isSelectingFolder || isCreating}
-            onClick={() => void handleChooseFolder()}
-            type="button"
-          >
-            {isSelectingFolder
-              ? 'Opening folder picker…'
-              : 'Choose exported archive folder'}
-          </button>
-          <p>
-            Choose the parent folder that contains compatible exported memories
-            folders, such as “memories”, “memories 2”, and similar folders.
-          </p>
-        </div>
-
-        {folderPickerMessage && (
-          <div className="state-message manual-path-fallback">
-            {folderPickerMessage}
-          </div>
-        )}
-
-        <form
-          className="source-form"
-          onSubmit={(event) => void handleCreateSource(event)}
-        >
-          <label>
-            Source name
-            <input
-              ref={nameInputRef}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Family archive drive"
-              value={name}
-            />
-          </label>
-
-          <label>
-            Or enter the folder path manually
-            <input
-              onChange={(event) => setRootPath(event.target.value)}
-              placeholder="/Volumes/MY_DRIVE/exported-archive"
-              value={rootPath}
-            />
-          </label>
-
-          <button
-            className="primary-button"
-            disabled={isCreating}
-            type="submit"
-          >
-            {isCreating ? 'Adding source…' : 'Add source'}
-          </button>
-        </form>
-
-        <p className="form-hint">
-          Select the parent folder containing <code>memories</code>,{' '}
-          <code>memories 2</code>, and any later folders. Supports compatible
-          Snapchat export folder structures.
-        </p>
-      </section>
-
-      <section className="settings-section">
-        <div className="settings-section-header">
-          <div>
-            <p className="eyebrow">Configured folders</p>
-            <h3>Memory sources</h3>
-          </div>
-
-          <button
-            className="secondary-button"
-            disabled={isLoading}
-            onClick={handleRefreshSources}
-            type="button"
-          >
-            Refresh
-          </button>
-        </div>
-
-        {isLoading && (
-          <div className="state-message">Loading configured sources…</div>
-        )}
-
-        {!isLoading && sources.length === 0 && (
-          <div className="state-message">
-            No source configured yet. Add an exported archive folder above.
-          </div>
-        )}
-
-        {!isLoading && sources.length > 0 && (
-          <div className="source-list">
-            {sources.map((source) => {
-              const isScanning = scanningSourceId === source.id;
-              const isDeleting = deletingSourceId === source.id;
-              const isRefreshingAvailability =
-                refreshingAvailabilitySourceId === source.id;
-              const isUnavailable = source.availabilityStatus !== 'AVAILABLE';
-              const sourceStateLabel = getSourceStateLabel(source, isScanning);
-
-              return (
-                <article className="source-card" key={source.id}>
-                  <div className="source-card-main">
-                    <div>
-                      <h4>{source.name}</h4>
-                      <span className="source-path">Local source folder</span>
-                    </div>
-
-                    <span
-                      className={`source-status source-status-${(isScanning
-                        ? 'RUNNING'
-                        : source.availabilityStatus.toLowerCase()
-                      ).toLowerCase()}`}
-                    >
-                      {sourceStateLabel}
-                    </span>
-                  </div>
-
-                  <div className="source-card-meta">
-                    <span>Last scan: {formatDate(source.lastScanAt)}</span>
-                    <span>{getStatusLabel(source.lastScanStatus)}</span>
-                    <span>
-                      {source.favoriteCount.toLocaleString()} favorite
-                      {source.favoriteCount === 1 ? '' : 's'}
-                    </span>
-                  </div>
-
-                  {isUnavailable && (
-                    <p className="source-availability-message">
-                      {source.availabilityMessage}
-                    </p>
-                  )}
-
-                  <div className="source-card-actions">
-                    <button
-                      className="primary-button"
-                      disabled={isScanning || isDeleting || isUnavailable}
-                      onClick={() => void handleScan(source)}
-                      type="button"
-                    >
-                      {isScanning ? 'Scanning…' : 'Scan source'}
-                    </button>
-
-                    <button
-                      className="secondary-button"
-                      disabled={isBackingUpFavorites || isDeleting}
-                      onClick={() => void handleBackupFavorites(source)}
-                      type="button"
-                    >
-                      Export Favorites
-                    </button>
-
-                    <button
-                      className="secondary-button"
-                      disabled={isPreviewingRestore || isDeleting}
-                      onClick={() => handleChooseFavoritesBackup(source)}
-                      type="button"
-                    >
-                      {isPreviewingRestore && importSource?.id === source.id
-                        ? 'Reading backup…'
-                        : 'Import Favorites Backup'}
-                    </button>
-
-                    <button
-                      className="secondary-button"
-                      disabled={isRefreshingAvailability}
-                      onClick={() =>
-                        void handleRefreshSourceAvailability(source)
-                      }
-                      type="button"
-                    >
-                      {isRefreshingAvailability
-                        ? 'Refreshing…'
-                        : 'Refresh status'}
-                    </button>
-
-                    <button
-                      className="danger-button"
-                      disabled={isDeleting}
-                      onClick={() => void handleDelete(source)}
-                      type="button"
-                    >
-                      {isDeleting ? 'Removing…' : 'Remove'}
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      <section className="settings-section">
-        <div className="settings-section-header">
-          <div>
-            <p className="eyebrow">About</p>
-            <h3>Independent tool</h3>
-          </div>
-        </div>
-
-        <p className="diagnostic-message">{INDEPENDENCE_DISCLAIMER}</p>
-        <p className="diagnostic-message">
-          Compatible Snapchat export formats may be read locally. Compatibility
-          references are descriptive only.
-        </p>
       </section>
     </section>
   );

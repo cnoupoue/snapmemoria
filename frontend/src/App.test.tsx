@@ -297,9 +297,7 @@ describe('App onboarding', () => {
 
     render(<App />);
 
-    expect(
-      await screen.findByText('Your files stay on your computer.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Local only.')).toBeInTheDocument();
     expect(screen.getByText('Nothing is uploaded.')).toBeInTheDocument();
   });
 
@@ -311,11 +309,6 @@ describe('App onboarding', () => {
     expect(
       await screen.findByText(
         'This application is an independent, open-source local tool and is not affiliated, associated, authorized, endorsed by, or in any way officially connected with Snap Inc. or Snapchat.',
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'Compatible Snapchat export formats may be read locally. Compatibility references are descriptive only.',
       ),
     ).toBeInTheDocument();
   });
@@ -357,9 +350,9 @@ describe('App onboarding', () => {
     expect(screen.getByLabelText('Source name')).toHaveValue(
       'snapchat-memories',
     );
-    expect(
-      screen.getByLabelText('Or enter the folder path manually'),
-    ).toHaveValue('/Volumes/SNAPCHAT/snapchat-memories');
+    expect(screen.getByLabelText('Folder path')).toHaveValue(
+      '/Volumes/SNAPCHAT/snapchat-memories',
+    );
   });
 
   it('hides onboarding after a source is added', async () => {
@@ -378,7 +371,7 @@ describe('App onboarding', () => {
     );
     await user.type(screen.getByLabelText('Source name'), 'Snapchat USB');
     await user.type(
-      screen.getByLabelText('Or enter the folder path manually'),
+      screen.getByLabelText('Folder path'),
       '/Volumes/SNAP/snapchat-memories',
     );
     await user.click(screen.getByRole('button', { name: 'Add source' }));

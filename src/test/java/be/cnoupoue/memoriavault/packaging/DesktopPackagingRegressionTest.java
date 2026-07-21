@@ -19,7 +19,9 @@ class DesktopPackagingRegressionTest {
   @Test
   void macosPackagingUsesBrowserRuntimeWithoutJavafxDesktopMode() throws Exception {
     String makefile = Files.readString(Path.of("Makefile"));
+    String macosIconScript = Files.readString(Path.of("packaging/macos/scripts/create-icns.mjs"));
     String buildProductionTarget = makeTarget(makefile, "build-production");
+    String macosIconTarget = makeTarget(makefile, "generate-macos-icon");
     String macosPackageTarget = makeTarget(makefile, "package-macos-app");
     String mainApplication =
         Files.readString(
@@ -29,6 +31,19 @@ class DesktopPackagingRegressionTest {
 
     assertThat(buildProductionTarget)
         .contains("./mvnw clean -P$(SPRING_PROFILE) -DskipTests package");
+    assertThat(makefile)
+        .contains("APP_ICON_SOURCE ?= src/main/resources/icon.png")
+        .contains("MACOS_ICON ?= $(GENERATED_ICON_DIR)/MemoriaVault.icns")
+        .doesNotContain("MACOS_ICON_SOURCE")
+        .doesNotContain("frontend/public/favicon.png")
+        .doesNotContain("packaging/macos/icon/MemoriaVault.icns");
+    assertThat(macosIconTarget)
+        .contains("$(APP_ICON_SOURCE)")
+        .contains("node \"$(MACOS_PACKAGING_DIR)/scripts/create-icns.mjs\"");
+    assertThat(macosIconScript)
+        .contains("must be an 8-bit RGBA PNG")
+        .contains("must have fully transparent corner pixels");
+    assertThat(Path.of("packaging/macos/icon/MemoriaVault.icns")).doesNotExist();
     assertThat(macosPackageTarget)
         .contains("--main-class \"org.springframework.boot.loader.launch.JarLauncher\"");
     assertThat(macosPackageTarget).contains("--arguments \"$(SPRING_ARGS)\"");
@@ -98,6 +113,10 @@ class DesktopPackagingRegressionTest {
         .contains("function Find-InstalledFfmpeg")
         .contains("function Install-FfmpegWithChocolatey")
         .contains("function Stage-FfmpegFromInstalledLocation")
+        .contains("function New-WindowsIconFromPng")
+        .contains("$appIconSource = Join-Path $root 'src\\main\\resources\\icon.png'")
+        .contains("$windowsIcon = Join-Path $generatedIconDir 'MemoriaVault.ico'")
+        .contains("New-WindowsIconFromPng -SourcePng $appIconSource -DestinationIco $windowsIcon")
         .contains("$chocoOutput = & choco.exe install ffmpeg --no-progress -y 2>&1")
         .contains("$chocoExitCode = $LASTEXITCODE")
         .contains("[string]::IsNullOrWhiteSpace($installedFfmpeg)")
@@ -114,6 +133,15 @@ class DesktopPackagingRegressionTest {
         .doesNotContain("gyan.dev")
         .doesNotContain("Invoke-WebRequest")
         .doesNotContain("Join-String");
+    assertThat(workflow)
+        .contains("Test-Path \"dist/generated-icons/MemoriaVault.ico\"")
+        .contains("--icon \"dist/generated-icons/MemoriaVault.ico\"")
+        .doesNotContain("packaging/windows/icon/MemoriaVault.ico");
+    assertThat(windowsReadme)
+        .contains(
+            "Generates `dist/generated-icons/MemoriaVault.ico` from `src/main/resources/icon.png`")
+        .doesNotContain("icon/MemoriaVault.ico");
+    assertThat(Path.of("packaging/windows/icon/MemoriaVault.ico")).doesNotExist();
     assertThat(
             Pattern.compile(
                     "(?m)^\\s*choco(?:\\.exe)?\\s+install\\s+ffmpeg\\s+--no-progress\\s+-y\\s*$")

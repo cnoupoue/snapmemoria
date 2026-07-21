@@ -17,11 +17,14 @@ Signed releases require:
 - Apple Developer Team ID
 - GitHub Actions secrets for certificate import, signing identity, and notarization credentials
 
-Current macOS-specific assets:
+Current macOS-specific packaging assets:
 
-- `icon/MemoriaVault.icns`
 - `scripts/create-icns.mjs`
 - `ffmpeg/arm64/ffmpeg`
+
+The application icon source of truth is `src/main/resources/icon.png`. `make package-macos-app`
+generates `dist/generated-icons/MemoriaVault.icns` from that PNG during packaging. Do not commit a
+maintained `.icns` copy.
 
 The generated jpackage app image is expected to contain:
 

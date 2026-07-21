@@ -18,8 +18,9 @@ TARGET_OS ?= macos
 TARGET_ARCH ?= arm64
 MACOS_PACKAGING_DIR ?= $(PACKAGING_DIR)/macos
 MACOS_ARCH ?= $(TARGET_ARCH)
-MACOS_ICON ?= $(MACOS_PACKAGING_DIR)/icon/MemoriaVault.icns
-MACOS_ICON_SOURCE ?= frontend/public/favicon.png
+APP_ICON_SOURCE ?= src/main/resources/icon.png
+GENERATED_ICON_DIR ?= $(DIST_DIR)/generated-icons
+MACOS_ICON ?= $(GENERATED_ICON_DIR)/MemoriaVault.icns
 MACOS_APP_PATH ?= $(APP_OUTPUT_DIR)/$(APP_NAME).app
 MACOS_DMG_PATH ?= $(INSTALLER_OUTPUT_DIR)/$(APP_ARTIFACT_NAME)-$(APP_VERSION)-macos-$(MACOS_ARCH).dmg
 JLINK_OPTIONS ?= --strip-debug --no-man-pages --no-header-files --compress zip-6
@@ -170,7 +171,7 @@ check-jpackage:
 
 check-icon-tools: check-macos
 	@command -v sips >/dev/null 2>&1 || { echo "sips is required to generate the macOS icon."; exit 1; }
-	@command -v node >/dev/null 2>&1 || { echo "node is required to generate the macOS icon fallback."; exit 1; }
+	@command -v node >/dev/null 2>&1 || { echo "node is required to generate the macOS icon."; exit 1; }
 
 check-production-jar:
 	@test -f "$(JAR_PATH)" || { echo "Missing production JAR: $(JAR_PATH). Run 'make package-jar' first."; exit 1; }
@@ -200,27 +201,23 @@ prepare-bundled-ffmpeg: prepare-macos-input check-bundled-ffmpeg ## Stage bundle
 	install -m 755 "$(BUNDLED_FFMPEG_SOURCE)" "$(BUNDLED_FFMPEG_STAGED_PATH)"
 	@echo "Staged bundled FFmpeg at $(BUNDLED_FFMPEG_STAGED_PATH)"
 
-generate-macos-icon: check-icon-tools ## Generate the macOS app icon from the favicon PNG
-	@test -f "$(MACOS_ICON_SOURCE)" || { echo "Missing icon source: $(MACOS_ICON_SOURCE)"; exit 1; }
+generate-macos-icon: check-icon-tools ## Generate the macOS app icon from the shared application PNG
+	@test -f "$(APP_ICON_SOURCE)" || { echo "Missing icon source: $(APP_ICON_SOURCE)"; exit 1; }
 	@set -e; \
 	tmp_dir="$$(mktemp -d "$${TMPDIR:-/tmp}/memoriavault-icon.XXXXXX")"; \
 	iconset="$$tmp_dir/$(APP_NAME).iconset"; \
 	mkdir -p "$$iconset" "$$(dirname "$(MACOS_ICON)")"; \
-	sips -z 16 16 "$(MACOS_ICON_SOURCE)" --out "$$iconset/icon_16x16.png" >/dev/null; \
-	sips -z 32 32 "$(MACOS_ICON_SOURCE)" --out "$$iconset/icon_16x16@2x.png" >/dev/null; \
-	sips -z 32 32 "$(MACOS_ICON_SOURCE)" --out "$$iconset/icon_32x32.png" >/dev/null; \
-	sips -z 64 64 "$(MACOS_ICON_SOURCE)" --out "$$iconset/icon_32x32@2x.png" >/dev/null; \
-	sips -z 128 128 "$(MACOS_ICON_SOURCE)" --out "$$iconset/icon_128x128.png" >/dev/null; \
-	sips -z 256 256 "$(MACOS_ICON_SOURCE)" --out "$$iconset/icon_128x128@2x.png" >/dev/null; \
-	sips -z 256 256 "$(MACOS_ICON_SOURCE)" --out "$$iconset/icon_256x256.png" >/dev/null; \
-	sips -z 512 512 "$(MACOS_ICON_SOURCE)" --out "$$iconset/icon_256x256@2x.png" >/dev/null; \
-	sips -z 512 512 "$(MACOS_ICON_SOURCE)" --out "$$iconset/icon_512x512.png" >/dev/null; \
-	sips -z 1024 1024 "$(MACOS_ICON_SOURCE)" --out "$$iconset/icon_512x512@2x.png" >/dev/null; \
-	if command -v iconutil >/dev/null 2>&1 && iconutil -c icns "$$iconset" -o "$(MACOS_ICON)" >/dev/null 2>&1; then \
-		true; \
-	else \
-		node "$(MACOS_PACKAGING_DIR)/scripts/create-icns.mjs" "$$iconset" "$(MACOS_ICON)"; \
-	fi; \
+	sips -s format png -z 16 16 "$(APP_ICON_SOURCE)" --out "$$iconset/icon_16x16.png" >/dev/null; \
+	sips -s format png -z 32 32 "$(APP_ICON_SOURCE)" --out "$$iconset/icon_16x16@2x.png" >/dev/null; \
+	sips -s format png -z 32 32 "$(APP_ICON_SOURCE)" --out "$$iconset/icon_32x32.png" >/dev/null; \
+	sips -s format png -z 64 64 "$(APP_ICON_SOURCE)" --out "$$iconset/icon_32x32@2x.png" >/dev/null; \
+	sips -s format png -z 128 128 "$(APP_ICON_SOURCE)" --out "$$iconset/icon_128x128.png" >/dev/null; \
+	sips -s format png -z 256 256 "$(APP_ICON_SOURCE)" --out "$$iconset/icon_128x128@2x.png" >/dev/null; \
+	sips -s format png -z 256 256 "$(APP_ICON_SOURCE)" --out "$$iconset/icon_256x256.png" >/dev/null; \
+	sips -s format png -z 512 512 "$(APP_ICON_SOURCE)" --out "$$iconset/icon_256x256@2x.png" >/dev/null; \
+	sips -s format png -z 512 512 "$(APP_ICON_SOURCE)" --out "$$iconset/icon_512x512.png" >/dev/null; \
+	sips -s format png -z 1024 1024 "$(APP_ICON_SOURCE)" --out "$$iconset/icon_512x512@2x.png" >/dev/null; \
+	node "$(MACOS_PACKAGING_DIR)/scripts/create-icns.mjs" "$$iconset" "$(MACOS_ICON)"; \
 	rm -rf "$$tmp_dir"; \
 	test -f "$(MACOS_ICON)" || { echo "Icon generation failed: $(MACOS_ICON)"; exit 1; }
 
@@ -343,7 +340,7 @@ inspect-macos-app: ## Verify the generated macOS app bundle looks runnable
 	@test -d "$(MACOS_APP_PATH)" || { echo "Missing app bundle: $(MACOS_APP_PATH). Run 'make package-macos-app' first."; exit 1; }
 	@test -d "$(MACOS_APP_PATH)/Contents/runtime" || { echo "Missing bundled runtime in $(MACOS_APP_PATH)."; exit 1; }
 	@bash -c '. "$(MACOS_PACKAGING_DIR)/scripts/app-jar.sh"; find_packaged_app_jar "$$1" >/dev/null' _ "$(MACOS_APP_PATH)" || exit 1
-	@test ! -f "$(MACOS_ICON)" || test -f "$(MACOS_APP_PATH)/Contents/Resources/$(APP_NAME).icns" || { echo "Missing app icon in $(MACOS_APP_PATH)."; exit 1; }
+	@test -f "$(MACOS_APP_PATH)/Contents/Resources/$(APP_NAME).icns" || { echo "Missing app icon in $(MACOS_APP_PATH)."; exit 1; }
 	@test -x "$(MACOS_APP_PATH)/Contents/MacOS/$(APP_NAME)" || { echo "Missing app launcher executable."; exit 1; }
 	@echo "macOS app bundle is present and contains its runtime, launcher, JAR, and icon."
 
